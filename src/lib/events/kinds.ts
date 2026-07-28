@@ -76,7 +76,8 @@ const moodLogged = z.object({
 // ── Dominios profundos: eventos resumen (I-11) ──────────────────────
 
 const workoutSession = z.object({
-  sessionId: z.number().int(),
+  /// ULID de WorkoutSession. El detalle vive en exercise_sets, no aquí.
+  sessionId: z.string(),
   routine: z.string().optional(),
   durationMin: z.number().int().min(0),
   volumeKg: z.number().min(0),
@@ -86,7 +87,8 @@ const workoutSession = z.object({
 });
 
 const mealLogged = z.object({
-  mealId: z.number().int(),
+  /// ULID de Meal. El detalle vive en meal_items, no aquí.
+  mealId: z.string(),
   mealType: z.string(),
   recipe: z.string().optional(),
   itemCount: z.number().int().min(0),

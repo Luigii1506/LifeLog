@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { QuickActions } from "@/components/quick-actions";
 import { Timeline } from "@/components/timeline";
 import { timelineForDay } from "@/lib/events/query";
@@ -16,6 +17,14 @@ export default async function TodayPage() {
           {formatDate(now)}
         </h1>
       </header>
+
+      <Link
+        href="/gym"
+        className="mb-3 flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-4 transition active:scale-[0.99]"
+      >
+        <span className="font-medium">Gimnasio</span>
+        <span className="text-muted">→</span>
+      </Link>
 
       <QuickActions />
 
