@@ -18,13 +18,21 @@ export default async function TodayPage() {
         </h1>
       </header>
 
-      <Link
-        href="/gym"
-        className="mb-3 flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-4 transition active:scale-[0.99]"
-      >
-        <span className="font-medium">Gimnasio</span>
-        <span className="text-muted">→</span>
-      </Link>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {[
+          { href: "/gym", label: "Gimnasio" },
+          { href: "/food", label: "Alimentación" },
+        ].map((m) => (
+          <Link
+            key={m.href}
+            href={m.href}
+            className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-4 transition active:scale-[0.99]"
+          >
+            <span className="font-medium">{m.label}</span>
+            <span className="text-muted">→</span>
+          </Link>
+        ))}
+      </div>
 
       <QuickActions />
 
