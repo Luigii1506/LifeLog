@@ -1,0 +1,522 @@
+// LifeLog — esquema de la capa de captura de LifeOS
+//
+// Gobernado por "09 - Vida/00 - Arquitectura/" en el Obsidian Vault:
+//   ADR-109  columna vertebral de eventos + tablas relacionales para dominios profundos
+//   ADR-110  LifeLog es dueño de este esquema. brain-ops LEE y no migra. (I-12)
+//   ADR-114  seudonimización: la nube guarda referencias, la identidad vive en casa
+//   ADR-116  identificadores ULID inmutables, mismo formato que el vault
+//   ADR-117  la propiedad de un dato se decide por campo, no por objeto
+//
+// Convenciones de objeto (DATA_OWNERSHIP §9):
+//   todo objeto   id · createdAt · updatedAt · status · source
+//   entidades     + name · aliases
+//   eventos       + startedAt · endedAt · timezone
+//   activos       + capturedAt · mimeType · storageKey · checksum
+//
+// Los `id` son ULID de 26 caracteres generados en la aplicación, no en la base:
+// el mismo formato que las 1,491 entidades del vault. Un solo formato de
+// identidad en todo el sistema, así que un id se puede mover entre capas sin
+// traducción.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ════════════════════════════════════════════════════════════════
+//  COLUMNA VERTEBRAL
+//  Línea de tiempo unificada + todos los dominios ligeros.
+//  Append-only. Nunca UPDATE, nunca DELETE (I-02, trigger en migración).
+// ════════════════════════════════════════════════════════════════
+
+model Event {
+  /// ULID. Es a la vez identidad e idempotencia: reimportar la misma fuente
+  /// con el mismo id no duplica (I-10).
+  id String @id
+
+  /// 'sleep.logged', 'workout.session', 'place.visit'. Ver EventSchema.
+  kind String
+
+  /// 'health', 'training', 'nutrition', 'finance', 'place', 'work', 'life'
+  domain String
+
+  /// Cuándo ocurrió. Es lo que se analiza.
+  startedAt DateTime
+
+  /// Cuándo terminó. Nulo si es instantáneo o si sigue abierto.
+  endedAt DateTime?
+
+  /// IANA, p. ej. "America/Mexico_City". No es opcional: sin zona horaria,
+  /// un viaje corrompe todo análisis por hora del día y el error solo se
+  /// descubre años después.
+  timezone String
+
+  /// Referencia opaca a una entidad que vive FUERA de esta base: una nota del
+  /// vault, una persona local, un protocolo (ADR-114). Nulo es válido; un id
+  /// que no resuelve es un error de integridad (I-07).
+  entityId String?
+
+  /// JSON validado contra EventSchema antes de escribir.
+  /// TEXT y no Json: SQLite. Al migrar a Postgres pasa a jsonb.
+  payloadJson String
+
+  schemaVersion Int @default(1)
+
+  /// Corrección: anula un evento anterior. Las proyecciones lo ignoran.
+  revokesId String?
+
+  status    String   @default("active")
+  /// 'app:today', 'app:gym', 'cli', 'import:owntracks'
+  source    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assets AssetLink[]
+
+  @@index([startedAt])
+  @@index([kind, startedAt])
+  @@index([domain, startedAt])
+  @@index([entityId])
+  @@index([revokesId])
+  @@map("events")
+}
+
+/// Contrato de payload por kind. Versionado: añadir un campo publica la v2
+/// y los eventos viejos siguen siendo válidos con su schemaVersion.
+model EventSchema {
+  kind          String
+  schemaVersion Int
+  jsonSchema    String
+  description   String?
+  createdAt     DateTime @default(now())
+
+  @@id([kind, schemaVersion])
+  @@map("event_schemas")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ACTIVOS Y RELACIONES
+//  Núcleo. Un binario nunca se guarda en la base ni en el vault:
+//  solo su referencia (DATA_OWNERSHIP §9.1).
+// ════════════════════════════════════════════════════════════════
+
+model Asset {
+  id String @id
+
+  /// Cuándo se tomó la foto, no cuándo se subió.
+  capturedAt DateTime?
+  mimeType   String
+  /// Clave en el almacenamiento de objetos.
+  storageKey String    @unique
+  /// SHA-256. Deduplicación e integridad.
+  checksum   String
+
+  width       Int?
+  height      Int?
+  durationSec Int?
+  bytes       Int?
+
+  /// ADR-114: obligatorio antes de subir. Una foto de un restaurante lleva
+  /// coordenadas GPS y modelo de teléfono; subirla sin limpiar anula la
+  /// seudonimización de ese evento.
+  exifStripped Boolean @default(false)
+
+  status    String   @default("active")
+  source    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  links AssetLink[]
+
+  @@index([checksum])
+  @@map("assets")
+}
+
+/// Enlaza un activo con lo que documenta. Polimórfico a propósito: una foto
+/// puede pertenecer a un evento, a una serie concreta (para analizar técnica)
+/// o a una entidad externa.
+model AssetLink {
+  id      String @id
+  assetId String
+
+  /// 'photo_of' · 'video_of' · 'receipt_of' · 'menu_of'
+  predicate String
+
+  eventId       String?
+  exerciseSetId String?
+  mealId        String?
+  /// Referencia opaca a algo fuera de esta base.
+  entityId      String?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  asset       Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  event       Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  exerciseSet ExerciseSet? @relation(fields: [exerciseSetId], references: [id], onDelete: Cascade)
+  meal        Meal?        @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([eventId])
+  @@index([entityId])
+  @@map("asset_links")
+}
+
+/// Relaciones genéricas hacia objetos que viven FUERA de esta base: una
+/// persona local, un protocolo, una entidad del grafo de conocimiento.
+/// Cuando existe una clave foránea real se usa la FK, no esta tabla.
+model Relation {
+  id        String @id
+  subjectId String
+  predicate String
+  objectId  String
+
+  createdAt DateTime @default(now())
+
+  @@unique([subjectId, predicate, objectId])
+  @@index([objectId])
+  @@map("relations")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DOMINIO PROFUNDO — GIMNASIO
+//  Justificación: la interfaz muestra la sesión anterior mientras
+//  registras. Sobre payloadJson eso es un escaneo completo; aquí es
+//  el índice [exerciseId, completedAt] de ExerciseSet.
+//  Evento resumen: workout.session
+// ════════════════════════════════════════════════════════════════
+
+model Exercise {
+  id   String @id
+  name String @unique
+
+  /// 'pecho', 'espalda', 'pierna', 'hombro', 'brazo', 'core'
+  muscleGroup String?
+  /// 'empuje vertical', 'tracción horizontal', 'bisagra de cadera'…
+  movement    String?
+  /// 'barra', 'mancuerna', 'polea', 'máquina', 'peso corporal'
+  equipment   String?
+
+  /// Nota opcional en "10 - Personal/Ejercicios/" con técnica y errores
+  /// comunes (ADR-117: la definición es de la base, la técnica del vault).
+  entityId String?
+
+  isUnilateral Boolean @default(false)
+  notes        String?
+
+  status    String   @default("active")
+  source    String   @default("app:gym")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  routineItems RoutineExercise[]
+  sets         ExerciseSet[]
+
+  @@map("exercises")
+}
+
+model WorkoutRoutine {
+  id   String @id
+  name String @unique
+
+  objective     String?
+  suggestedDays String?
+  estimatedMin  Int?
+  notes         String?
+  sortOrder     Int     @default(0)
+
+  status    String   @default("active")
+  source    String   @default("app:gym")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exercises RoutineExercise[]
+  sessions  WorkoutSession[]
+
+  @@map("workout_routines")
+}
+
+/// El plan: qué ejercicios componen una rutina y en qué orden.
+model RoutineExercise {
+  id         String @id
+  routineId  String
+  exerciseId String
+
+  sortOrder Int @default(0)
+
+  targetSets Int?
+  /// Rango, no número: '8-10'
+  targetReps String?
+  restSec    Int?
+  targetRir  Int?
+  notes      String?
+
+  routine  WorkoutRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([routineId, exerciseId])
+  @@index([routineId, sortOrder])
+  @@map("routine_exercises")
+}
+
+/// Lo que realmente ocurrió. Distinto de WorkoutRoutine, que es el plan.
+model WorkoutSession {
+  id        String  @id
+  routineId String?
+
+  startedAt DateTime
+  endedAt   DateTime?
+  timezone  String
+
+  /// Referencia opaca al lugar (un gimnasio es una entidad fuera de aquí).
+  placeEntityId String?
+  energyBefore  Int?
+  rpe           Int?
+  notes         String?
+
+  // Agregados calculados al cerrar. Nulos mientras la sesión está abierta.
+  volumeKg    Float?
+  setCount    Int?
+  durationMin Int?
+
+  /// Evento resumen emitido al cerrar.
+  /// endedAt no nulo con eventId nulo = violación de I-11.
+  eventId String?
+
+  status    String   @default("open")
+  source    String   @default("app:gym")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  routine WorkoutRoutine? @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  sets    ExerciseSet[]
+
+  @@index([startedAt])
+  @@index([endedAt])
+  @@map("workout_sessions")
+}
+
+model ExerciseSet {
+  id         String @id
+  sessionId  String
+  exerciseId String
+
+  setIndex Int
+  /// 'work' · 'warmup' · 'dropset' · 'failure'
+  setType  String @default("work")
+  reps     Int?
+  weightKg Float?
+
+  /// Reps in reserve. El RPE se deriva: 10 - rir.
+  rir Int?
+
+  // Para ejercicios de tiempo o distancia
+  durationSec Int?
+  distanceM   Float?
+
+  notes       String?
+  completedAt DateTime @default(now())
+
+  session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  assets   AssetLink[]
+
+  /// LA consulta que justifica este dominio profundo:
+  /// "dame las series de la sesión anterior de este ejercicio"
+  @@index([exerciseId, completedAt])
+  @@index([sessionId, setIndex])
+  @@map("exercise_sets")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DOMINIO PROFUNDO — ALIMENTACIÓN
+//  Justificación: receta con ingredientes es una N:M real, y duplicar
+//  una comida previa ajustando solo lo distinto exige histórico
+//  estructurado.
+//  Evento resumen: meal.logged
+// ════════════════════════════════════════════════════════════════
+
+model Food {
+  id    String  @id
+  name  String  @unique
+  brand String?
+
+  entityId String?
+
+  /// 'g' | 'ml' | 'unit'. Los macros se expresan por 100 de esta unidad,
+  /// salvo 'unit', donde son por pieza.
+  unit String @default("g")
+
+  kcal     Float?
+  proteinG Float?
+  carbsG   Float?
+  fatG     Float?
+  fiberG   Float?
+
+  barcode String?
+
+  status    String   @default("active")
+  source    String   @default("app:food")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipeItems RecipeIngredient[]
+  mealItems   MealItem[]
+
+  @@index([barcode])
+  @@map("foods")
+}
+
+/// Comida habitual reutilizable: 'Desayuno habitual'.
+model Recipe {
+  id   String @id
+  name String @unique
+
+  /// Sugerencia, no restricción: 'desayuno' | 'comida' | 'cena' | 'snack'
+  mealType    String?
+  servings    Float   @default(1)
+  prepMinutes Int?
+  notes       String?
+  entityId    String?
+
+  status    String   @default("active")
+  source    String   @default("app:food")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredients RecipeIngredient[]
+  meals       Meal[]
+
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id       String @id
+  recipeId String
+  foodId   String
+
+  amount      Float
+  unit        String  @default("g")
+  preparation String?
+  sortOrder   Int     @default(0)
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  food   Food   @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, foodId])
+  @@index([recipeId, sortOrder])
+  @@map("recipe_ingredients")
+}
+
+/// Lo que realmente comí. Puede partir de una Recipe y desviarse.
+model Meal {
+  id       String  @id
+  recipeId String?
+
+  mealType  String
+  startedAt DateTime
+  endedAt   DateTime?
+  timezone  String
+
+  placeEntityId String?
+  hungerBefore  Int?
+  fullnessAfter Int?
+  notes         String?
+
+  // Agregados calculados desde MealItem al cerrar.
+  kcal     Float?
+  proteinG Float?
+  carbsG   Float?
+  fatG     Float?
+
+  /// Evento resumen emitido (I-11).
+  eventId String?
+
+  status    String   @default("open")
+  source    String   @default("app:food")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipe Recipe?     @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  items  MealItem[]
+  assets AssetLink[]
+
+  @@index([startedAt])
+  @@map("meals")
+}
+
+model MealItem {
+  id     String  @id
+  mealId String
+  foodId String?
+
+  /// Desnormalizado a propósito: permite registrar algo que no está en Food
+  /// sin obligar a crear la entidad primero. La fricción mata el registro.
+  name String
+
+  amount Float?
+  unit   String @default("g")
+
+  kcal     Float?
+  proteinG Float?
+  carbsG   Float?
+  fatG     Float?
+
+  notes String?
+
+  meal Meal  @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food Food? @relation(fields: [foodId], references: [id], onDelete: SetNull)
+
+  @@index([mealId])
+  @@map("meal_items")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PROYECCIONES
+//  Caché. Reconstruibles siempre desde events + dominios profundos (I-04).
+//  Si una proyección contiene algo que no está en las fuentes, es un bug.
+// ════════════════════════════════════════════════════════════════
+
+/// Alimenta el frontmatter de las notas diarias y el dashboard.
+/// Las claves de `metric` que llegan al vault son la lista cerrada
+/// de Convenciones §7.2.
+model DailyMetric {
+  /// YYYY-MM-DD en zona horaria local
+  date   String
+  metric String
+
+  value      Float?
+  valueText  String?
+  unit       String?
+  eventCount Int      @default(0)
+  computedAt DateTime @default(now())
+
+  @@id([date, metric])
+  @@index([metric, date])
+  @@map("daily_metrics")
+}
+
+/// Alimenta el bloque `metrics` de las notas de entidad personal.
+model EntityStat {
+  entityId String
+  metric   String
+
+  value      Float?
+  valueText  String?
+  computedAt DateTime @default(now())
+
+  @@id([entityId, metric])
+  @@map("entity_stats")
+}
+
+// Nota: no hay SyncLog aquí. brain-ops registra qué sincronizó en su propio
+// almacén — no puede escribir en esta base (I-12).
+//
+// Pendientes por fase (DATA_OWNERSHIP, orden de implementación):
+//   dominio 3  Place · PlaceVisit · VisitItem
+//   dominio 4  Account · Transaction · Category
+//   Tag        puramente aditivo; entra cuando un módulo lo necesite
