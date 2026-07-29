@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTestDatabase } from "./setup-db";
+import { createTestDatabase, HAY_BASE_DE_PRUEBAS } from "./setup-db";
 
 let cleanup: () => void;
 let db: typeof import("@/lib/db").db;
@@ -7,6 +7,7 @@ let flows: typeof import("@/lib/quick/flows");
 let kinds: typeof import("@/lib/events/kinds");
 
 beforeAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   const test = createTestDatabase();
   cleanup = test.cleanup;
   process.env.DATABASE_URL = test.url;
@@ -16,8 +17,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   await db.$disconnect();
-  cleanup();
+  cleanup?.();
 });
 
 const COMPLETAS: Record<string, Record<string, string | number>> = {
@@ -45,7 +47,7 @@ const MINIMAS: Record<string, Record<string, string | number>> = {
   note: { text: "x" },
 };
 
-describe("flujos guiados de dominios ligeros", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("flujos guiados de dominios ligeros", () => {
   it.each(flowIds())("«%s» produce un payload válido", async (id) => {
     const spec = await flows.buildQuickFlow(id);
     expect(spec).not.toBeNull();

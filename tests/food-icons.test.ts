@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { iconFor } from "@/lib/food/suggestions";
+import { iconFor } from "@/lib/food/icons";
 
 describe("iconFor — los bugs de subcadena", () => {
   it("«queso panela» es queso, no sándwich: /pan/ casaba dentro de «panela»", () => {

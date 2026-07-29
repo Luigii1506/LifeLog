@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { BottomNav } from "@/components/shell/bottom-nav";
-import { TopBar } from "@/components/shell/top-bar";
+import { AppChrome } from "@/components/shell/app-chrome";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,11 +41,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col">
         {/* La barra inferior es fija: se reserva su alto para que nunca tape
             el último elemento de la página. */}
-        <div className="mx-auto w-full max-w-2xl flex-1 px-5 pb-24">
-          <TopBar />
-          {children}
-        </div>
-        <BottomNav />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

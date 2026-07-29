@@ -1,20 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient } from "@/generated/prisma/client";
-import { createTestDatabase } from "./setup-db";
+import { createTestDatabase, HAY_BASE_DE_PRUEBAS } from "./setup-db";
 
-let db: PrismaClient;
+let db: typeof import("@/lib/db").db;
 let cleanup: () => void;
 
-beforeAll(() => {
+beforeAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   const test = createTestDatabase();
   cleanup = test.cleanup;
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: test.url }) });
+  process.env.DATABASE_URL = test.url;
+  ({ db } = await import("@/lib/db"));
 });
 
 afterAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   await db.$disconnect();
-  cleanup();
+  cleanup?.();
 });
 
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -37,7 +38,7 @@ async function insertEvent(overrides: Partial<Parameters<typeof db.event.create>
 
 // ── I-02: append-only, garantizado por la base ──────────────────────────
 
-describe("I-02 — events es append-only", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("I-02 — events es append-only", () => {
   // OJO al depurar: el trigger devuelve SQLITE_CONSTRAINT_TRIGGER, y el cliente
   // de Prisma mapea CUALQUIER SQLITE_CONSTRAINT_* a "Foreign key constraint
   // violated". El mensaje que ve la aplicación es engañoso: no hay ningún
@@ -88,7 +89,7 @@ describe("I-02 — events es append-only", () => {
 
 // ── I-10: idempotencia ──────────────────────────────────────────────────
 
-describe("I-10 — idempotencia por id", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("I-10 — idempotencia por id", () => {
   it("el mismo id dos veces falla en vez de duplicar", async () => {
     const { ulid } = await import("ulid");
     const id = ulid();
@@ -100,7 +101,7 @@ describe("I-10 — idempotencia por id", () => {
 
 // ── ADR-116: identidad ──────────────────────────────────────────────────
 
-describe("ADR-116 — identidad ULID", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("ADR-116 — identidad ULID", () => {
   it("los ids son ULID de 26 caracteres", async () => {
     const event = await insertEvent();
     expect(event.id).toMatch(ULID);
@@ -116,7 +117,7 @@ describe("ADR-116 — identidad ULID", () => {
 
 // ── Convenciones de objeto ──────────────────────────────────────────────
 
-describe("Convenciones de objeto — DATA_OWNERSHIP §9", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("Convenciones de objeto — DATA_OWNERSHIP §9", () => {
   it("timezone es obligatorio: sin él un viaje corrompe la serie", async () => {
     await expect(insertEvent({ timezone: undefined })).rejects.toThrow();
   });

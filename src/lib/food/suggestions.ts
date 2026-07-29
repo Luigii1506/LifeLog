@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { iconFor, prioridadFria } from "./icons";
 
 /**
  * Sugerencias para la captura guiada.
@@ -22,88 +23,6 @@ export type FoodSuggestion = {
   /** Veces registrado. 0 significa que viene del catálogo, no del historial. */
   timesLogged: number;
 };
-
-/**
- * Iconos por palabra clave.
- *
- * Los patrones se construyen con lookarounds sobre \p{L} en vez de \b, por dos
- * bugs reales:
- *   - \b es ASCII: después de «é» no hay límite de palabra, así que /\bcafé\b/
- *     nunca casaba con «Café negro».
- *   - Sin límite alguno, /pan/ casa dentro de «queso panela» y /res/ dentro de
- *     «fresas» — un sándwich en el queso y un filete en la fruta.
- *
- * Gana la primera coincidencia, así que lo específico va antes que lo genérico.
- */
-function palabras(...formas: string[]): RegExp {
-  const alternativas = formas.join("|");
-  return new RegExp(`(?<!\\p{L})(?:${alternativas})(?!\\p{L})`, "iu");
-}
-
-const ICONOS: [RegExp, string][] = [
-  [palabras("huevos?", "claras?"), "🍳"],
-  [palabras("pollos?", "pechugas?"), "🍗"],
-  [palabras("tortillas?"), "🫓"],
-  [palabras("frijoles?"), "🫘"],
-  [palabras("aguacates?"), "🥑"],
-  [palabras("arroz"), "🍚"],
-  [palabras("quesos?"), "🧀"],
-  [palabras("caf[eé]s?"), "☕"],
-  [palabras("leches?", "licuados?", "yogur\\w*"), "🥛"],
-  [palabras("pan", "panes", "s[áa]ndwich\\w*", "tortas?", "bagels?"), "🥪"],
-  [palabras("carnes?", "res", "bistec\\w*", "filetes?"), "🥩"],
-  [palabras("pescados?", "at[uú]n", "salm[oó]n"), "🐟"],
-  [palabras("manzanas?", "frutas?", "pl[áa]tanos?", "fresas?", "naranjas?"), "🍎"],
-  [palabras("ensaladas?", "verduras?", "lechugas?", "jitomates?"), "🥗"],
-  [palabras("avena", "cereal\\w*", "granola"), "🥣"],
-  [palabras("prote[íi]nas?", "whey", "isolate"), "🥤"],
-  [palabras("papas?", "pastas?"), "🥔"],
-  [palabras("nueces?", "nuez", "cacahuates?", "almendras?"), "🥜"],
-  [palabras("tacos?"), "🌮"],
-  [palabras("aceites?", "mantequillas?"), "🫒"],
-];
-
-export function iconFor(name: string): string | null {
-  return ICONOS.find(([patron]) => patron.test(name))?.[1] ?? null;
-}
-
-/**
- * Orden para el arranque en frío.
- *
- * El día uno no hay frecuencia y ordenar alfabéticamente pone «Aceite de
- * oliva» y «Almendras» como sugerencias de desayuno. Esto es un prior
- * razonable, no una preferencia: en cuanto hay historial, la frecuencia real
- * lo desplaza por completo.
- */
-const PRIOR_FRIO: Record<string, RegExp[]> = {
-  desayuno: [
-    palabras("huevos?", "claras?"), palabras("avena"), palabras("caf[eé]s?"),
-    palabras("pan", "panes"), palabras("yogur\\w*"),
-    palabras("frutas?", "pl[áa]tanos?", "manzanas?", "fresas?"),
-    palabras("leches?"), palabras("jam[óo]n"),
-  ],
-  comida: [
-    palabras("pollos?", "pechugas?"), palabras("arroz"), palabras("frijoles?"),
-    palabras("tortillas?"), palabras("carnes?", "res"), palabras("verduras?"),
-    palabras("pescados?"), palabras("papas?", "pastas?"),
-  ],
-  cena: [
-    palabras("huevos?", "claras?"), palabras("pollos?", "pechugas?"),
-    palabras("at[uú]n"), palabras("ensaladas?", "lechugas?", "verduras?"),
-    palabras("quesos?"), palabras("tortillas?"), palabras("aguacates?"),
-  ],
-  snack: [
-    palabras("almendras?", "nueces?", "cacahuates?"),
-    palabras("frutas?", "pl[áa]tanos?", "manzanas?", "fresas?"),
-    palabras("yogur\\w*"), palabras("prote[íi]nas?"), palabras("quesos?"),
-  ],
-};
-
-function prioridadFria(nombre: string, mealType: string): number {
-  const patrones = PRIOR_FRIO[mealType] ?? [];
-  const posicion = patrones.findIndex((p) => p.test(nombre));
-  return posicion === -1 ? 0 : patrones.length - posicion;
-}
 
 /** Cantidad más repetida de una lista. La moda, no la media: comes 3 huevos
  *  o 2, nunca 2.4. */

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createTestDatabase } from "./setup-db";
+import { createTestDatabase, HAY_BASE_DE_PRUEBAS } from "./setup-db";
 
 let cleanup: () => void;
 let db: Awaited<ReturnType<typeof loadDb>>["db"];
@@ -16,6 +16,7 @@ let pressMilitarId: string;
 let elevacionesId: string;
 
 beforeAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   const test = createTestDatabase();
   cleanup = test.cleanup;
   ({ db } = await loadDb(test.url));
@@ -24,11 +25,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   await db.$disconnect();
-  cleanup();
+  cleanup?.();
 });
 
 beforeEach(async () => {
+  if (!HAY_BASE_DE_PRUEBAS) return;
   await db.exerciseSet.deleteMany();
   await db.workoutSession.deleteMany();
   await db.exercise.deleteMany();
@@ -54,7 +57,7 @@ async function sesionCompleta(sets: Array<[number, number]>, exerciseId = pressM
 
 // ── Ciclo de vida ───────────────────────────────────────────────────────
 
-describe("ciclo de vida de la sesión", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("ciclo de vida de la sesión", () => {
   it("solo puede haber una sesión abierta a la vez", async () => {
     await gym.startSession();
     await expect(gym.startSession()).rejects.toThrow(/sesión abierta/);
@@ -92,7 +95,7 @@ describe("ciclo de vida de la sesión", () => {
 
 // ── I-11: el evento resumen es obligatorio ──────────────────────────────
 
-describe("I-11 — todo dominio profundo emite su evento resumen", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("I-11 — todo dominio profundo emite su evento resumen", () => {
   it("cerrar emite workout.session y lo enlaza a la sesión", async () => {
     const resultado = await sesionCompleta([[40, 10], [40, 9], [40, 8]]);
 
@@ -129,7 +132,7 @@ describe("I-11 — todo dominio profundo emite su evento resumen", () => {
 
 // ── Agregados ───────────────────────────────────────────────────────────
 
-describe("agregados al cerrar", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("agregados al cerrar", () => {
   it("el volumen suma reps × peso", async () => {
     const r = await sesionCompleta([[40, 10], [40, 9], [35, 12]]);
     expect(r.volumeKg).toBe(40 * 10 + 40 * 9 + 35 * 12);
@@ -148,7 +151,7 @@ describe("agregados al cerrar", () => {
 
 // ── LA consulta que justifica ADR-109 ───────────────────────────────────
 
-describe("ADR-109 — la sesión anterior mientras registras", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("ADR-109 — la sesión anterior mientras registras", () => {
   it("devuelve las series de la última sesión cerrada", async () => {
     await sesionCompleta([[40, 10], [40, 9], [40, 8]]);
 
@@ -201,7 +204,7 @@ describe("ADR-109 — la sesión anterior mientras registras", () => {
 
 // ── Récords ─────────────────────────────────────────────────────────────
 
-describe("récords personales", () => {
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("récords personales", () => {
   it("la primera sesión de un ejercicio es récord", async () => {
     const r = await sesionCompleta([[40, 10]]);
     expect(r.prs).toEqual(["Press militar 40×10"]);

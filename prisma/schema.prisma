@@ -13,6 +13,9 @@
 //   eventos       + startedAt · endedAt · timezone
 //   activos       + capturedAt · mimeType · storageKey · checksum
 //
+// Postgres desde el despliegue (ADR-112). El modelo era portable por diseño:
+// migrar fue cambiar el proveedor y el adaptador, no el esquema.
+//
 // Los `id` son ULID de 26 caracteres generados en la aplicación, no en la base:
 // el mismo formato que las 1,491 entidades del vault. Un solo formato de
 // identidad en todo el sistema, así que un id se puede mover entre capas sin
@@ -24,7 +27,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -61,7 +64,9 @@ model Event {
   entityId String?
 
   /// JSON validado contra EventSchema antes de escribir.
-  /// TEXT y no Json: SQLite. Al migrar a Postgres pasa a jsonb.
+  /// Sigue siendo texto y no jsonb: el contrato es el schema versionado por
+  /// `kind`, no el tipo de la columna. Pasar a jsonb es una optimización de
+  /// consulta que se hará cuando haya consultas que la pidan.
   payloadJson String
 
   schemaVersion Int @default(1)
