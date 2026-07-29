@@ -29,11 +29,33 @@ export function connectionString(): string | undefined {
   );
 }
 
+/**
+ * Pista sobre la causa más probable cuando la variable «está» pero no vale.
+ *
+ * `vercel env pull` escribe `.env.local` con las variables marcadas como
+ * Sensitive **en blanco**, y Next carga `.env.local` con más prioridad que
+ * `.env`. El resultado es que editas `.env`, ves la variable ahí, y la app
+ * insiste en que falta. Sin este aviso el fallo apunta al archivo equivocado.
+ */
+function pistaSobreEnvLocal(): string {
+  if (process.env.NODE_ENV === "production") return "";
+  const vacias = ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL"].filter(
+    (k) => process.env[k] === "",
+  );
+  if (vacias.length === 0) return "";
+  return (
+    `\n\nEstá definida pero vacía: ${vacias.join(", ")}. ` +
+    "Suele ser `.env.local` de un `vercel env pull`, que devuelve en blanco las " +
+    "variables Sensitive y tapa a `.env`. Borra ese archivo o esas líneas."
+  );
+}
+
 function crearCliente(): PrismaClient {
   const url = connectionString();
   if (!url) {
     throw new Error(
-      "Falta DATABASE_URL. En local va en .env; en Vercel, en las variables de entorno del proyecto.",
+      "Falta DATABASE_URL. En local va en .env; en Vercel, en las variables de entorno del proyecto." +
+        pistaSobreEnvLocal(),
     );
   }
   return new PrismaClient({

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GlobalVoice } from "./global-voice";
 
 /**
  * Barra inferior fija.
@@ -11,7 +10,11 @@ import { GlobalVoice } from "./global-voice";
  * recolocar el teléfono, y esta app se usa de pie, con una mano, con prisa.
  *
  * Siempre visible: en un bucle de registro no debe haber ninguna pantalla sin
- * salida. El micrófono va en la barra porque es el camino más corto que hay.
+ * salida.
+ *
+ * El micrófono ya no vive aquí. Compartía fila con las pestañas, así que era
+ * pequeño y estaba pegado a tres enlaces que no querías tocar mientras hablas.
+ * Ahora es un botón flotante propio (`VoiceFab`), más grande y sin vecinos.
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -46,10 +49,6 @@ export function BottomNav() {
             </Link>
           );
         })}
-
-        <div className="flex flex-1 items-center justify-center py-1.5">
-          <GlobalVoice />
-        </div>
       </div>
     </nav>
   );

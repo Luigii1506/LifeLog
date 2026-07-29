@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addSet, createExercise, finishWorkout, removeSet } from "@/app/gym/actions";
-import { VoiceButton } from "@/components/guided/voice-button";
+import {
+  addSet,
+  createExercise,
+  editSet,
+  finishWorkout,
+  removeSet,
+} from "@/app/gym/actions";
+import { useVoiceTarget } from "@/components/voice/registry";
 import { parseSpokenSet } from "@/lib/gym/parse-spoken-set";
 import { matchOption } from "@/lib/match-option";
 
@@ -88,6 +94,7 @@ export function GuidedWorkout({
           sets={sets}
           pending={pending}
           onAdd={(d) => run(() => addSet({ sessionId, exerciseId: currentExercise.id, ...d }))}
+          onEdit={(id, d) => run(() => editSet(id, d))}
           onRemove={(id) => run(() => removeSet(id))}
           onNext={() => router.push(`/gym?grupo=${encodeURIComponent(initialGroup ?? "")}`)}
         />
@@ -126,20 +133,6 @@ export function GuidedWorkout({
       <h2 className="mb-3 text-xl font-semibold tracking-tight">
         ¿Qué vas a trabajar?
       </h2>
-      <div className="mb-3">
-        <VoiceButton
-          idleLabel="Dilo · «espalda»"
-          onTranscript={(texto) => {
-            const elegido = matchOption(
-              texto,
-              groups.map((g) => ({ value: g.group, label: g.group })),
-            );
-            if (!elegido) return false;
-            router.push(`/gym?grupo=${encodeURIComponent(elegido.value)}`);
-            return true;
-          }}
-        />
-      </div>
       <div className="grid grid-cols-2 gap-2">
         {groups.map((g) => (
           <button
@@ -221,6 +214,23 @@ function ExercisePicker({
   onBack: () => void;
 }) {
   const [filtro, setFiltro] = useState("");
+
+  // Sin coincidencia clara, lo dicho pasa al buscador en vez de registrar un
+  // ejercicio que no era: ves lo que entendió y eliges a mano. Registrar la
+  // serie equivocada cuesta más de deshacer que de teclear.
+  useVoiceTarget("Di el ejercicio", (texto) => {
+    const encontrado = matchOption(
+      texto,
+      exercises.map((e) => ({ value: e.id, label: e.name })),
+    );
+    if (encontrado) {
+      onPick(encontrado.value);
+      return true;
+    }
+    setFiltro(texto);
+    return false;
+  });
+
   const normaliza = (s: string) =>
     s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -238,24 +248,6 @@ function ExercisePicker({
         </button>
       </div>
 
-      <VoiceButton
-        lang="es-MX"
-        idleLabel="Di el ejercicio"
-        onTranscript={(texto) => {
-          const encontrado = matchOption(
-            texto,
-            exercises.map((e) => ({ value: e.id, label: e.name })),
-          );
-          if (encontrado) {
-            onPick(encontrado.value);
-            return true;
-          }
-          // Sin coincidencia clara, lo dicho pasa al buscador: se ve lo que
-          // entendió y se elige a mano en vez de registrar otro ejercicio.
-          setFiltro(texto);
-          return false;
-        }}
-      />
 
       <input
         value={filtro}
@@ -299,12 +291,12 @@ function ExercisePicker({
     </div>
   );
 }
-
 function SetLogger({
   exercise,
   sets,
   pending,
   onAdd,
+  onEdit,
   onRemove,
   onNext,
 }: {
@@ -313,32 +305,133 @@ function SetLogger({
   sets: SetRow[];
   pending: boolean;
   onAdd: (d: { weightKg: number | null; reps: number | null; rir: number | null }) => void;
+  onEdit: (
+    id: string,
+    d: { weightKg: number | null; reps: number | null; rir: number | null },
+  ) => void;
   onRemove: (id: string) => void;
   onNext: () => void;
 }) {
   const [peso, setPeso] = useState<string>("");
   const [reps, setReps] = useState<string>("");
   const [rir, setRir] = useState<string>("");
+  /** Serie que se está corrigiendo. Null = se está añadiendo una nueva. */
+  const [editando, setEditando] = useState<SetRow | null>(null);
   const pesoRef = useRef<HTMLInputElement>(null);
-
-  // El peso de la última serie: entre series casi nunca cambia.
-  const ultima = sets.at(-1);
-  useEffect(() => {
-    if (peso === "" && ultima?.weightKg != null) setPeso(String(ultima.weightKg));
-  }, [ultima?.weightKg, peso]);
 
   const num = (v: string) => {
     const n = Number(v.replace(",", "."));
     return v.trim() === "" || !Number.isFinite(n) ? null : n;
   };
 
-  function registrar() {
-    if (num(reps) === null && num(peso) === null) return;
-    onAdd({ weightKg: num(peso), reps: num(reps), rir: num(rir) });
+  const valores = { weightKg: num(peso), reps: num(reps), rir: num(rir) };
+  const completa = valores.reps !== null && valores.weightKg !== null;
+  const vacia = valores.reps === null && valores.weightKg === null;
+
+  function limpiar() {
+    // El peso NO se borra: entre series casi nunca cambia, y volver a
+    // teclearlo cada vez es la fricción que más se nota en el gimnasio.
+    // Reps y RIR sí, porque repetirlos por descuido registra una serie falsa.
     setReps("");
     setRir("");
+    setEditando(null);
     pesoRef.current?.blur();
   }
+
+  function registrar() {
+    if (vacia) return;
+    if (editando) onEdit(editando.id, valores);
+    else onAdd(valores);
+    limpiar();
+  }
+
+  function corregir(s: SetRow) {
+    setEditando(s);
+    setPeso(s.weightKg !== null ? String(s.weightKg) : "");
+    setReps(s.reps !== null ? String(s.reps) : "");
+    setRir(s.rir !== null ? String(s.rir) : "");
+  }
+
+  function cancelar() {
+    setEditando(null);
+    setReps("");
+    setRir("");
+  }
+
+  /**
+   * Voz: dictar la serie y confirmarla sin tocar la pantalla.
+   *
+   * Dictar RELLENA pero no registra —entre series se habla con prisa y una
+   * serie mal entendida ensucia el volumen del día—, así que hace falta una
+   * palabra explícita para confirmar. Con las manos ocupadas, decir «setenta
+   * por diez» y luego «aceptar» es todo el ciclo.
+   *
+   * «Aceptar» con los campos incompletos no registra a medias: avisa. Una
+   * serie sin repeticiones no es una serie.
+   */
+  useVoiceTarget(
+    editando ? `Corrigiendo serie ${editando.setIndex}` : "Di la serie · «setenta por diez»",
+    (texto) => {
+      // Primero la serie, después los comandos. Al revés, «ok setenta por
+      // diez» casaba con «aceptar» —por el «ok»— y registraba los valores
+      // anteriores en vez de los dictados. Una orden nunca lleva números y una
+      // serie siempre, así que el número desempata sin ambigüedad.
+      const serie = parseSpokenSet(texto);
+      if (serie && (serie.weightKg !== null || serie.reps !== null || serie.rir !== null)) {
+        if (serie.weightKg !== null) setPeso(String(serie.weightKg));
+        if (serie.reps !== null) setReps(String(serie.reps));
+        if (serie.rir !== null) setRir(String(serie.rir));
+        return true;
+      }
+
+      const orden = matchOption(texto, [
+        {
+          value: "aceptar",
+          label:
+            "aceptar acepta confirmar confirma listo guardar guarda agregar agrega anadir ok vale correcto",
+        },
+        {
+          value: "borrar",
+          label: "eliminar elimina borrar borra quitar quita deshacer error",
+        },
+        { value: "cancelar", label: "cancelar cancela dejalo olvidalo" },
+      ]);
+
+      if (orden?.value === "aceptar") {
+        // Con los campos vacíos no hay nada que aceptar; devolver false deja
+        // que el botón lo diga («No entendí») en vez de registrar una serie
+        // en blanco.
+        if (vacia) return false;
+        registrar();
+        return true;
+      }
+
+      if (orden?.value === "borrar") {
+        // La que se está corrigiendo, o la última registrada: es lo que uno
+        // quiere decir al soltar «eliminar» justo después de meterla.
+        const objetivo = editando ?? sets.at(-1);
+        if (!objetivo) return false;
+        onRemove(objetivo.id);
+        limpiar();
+        return true;
+      }
+
+      if (orden?.value === "cancelar" && editando) {
+        cancelar();
+        return true;
+      }
+
+      return false;
+    },
+  );
+
+  // El peso de la última serie: entre series casi nunca cambia.
+  const ultima = sets.at(-1);
+  useEffect(() => {
+    if (peso === "" && !editando && ultima?.weightKg != null) {
+      setPeso(String(ultima.weightKg));
+    }
+  }, [ultima?.weightKg, peso, editando]);
 
   return (
     <div className="space-y-4">
@@ -354,39 +447,55 @@ function SetLogger({
       </div>
 
       {sets.length > 0 && (
-        <ol className="space-y-1 rounded-xl border border-line bg-surface p-4">
-          {sets.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 font-mono text-sm">
-              <span className="w-4 text-muted">{s.setIndex}</span>
-              <span className="tabular-nums">
-                {s.weightKg ?? "—"} kg × {s.reps ?? "—"}
-              </span>
-              {s.rir !== null && <span className="text-muted">RIR {s.rir}</span>}
-              <button
-                onClick={() => onRemove(s.id)}
-                disabled={pending}
-                className="ml-auto text-muted hover:text-accent disabled:opacity-50"
-                aria-label={`Borrar serie ${s.setIndex}`}
+        <ol className="space-y-1 rounded-xl border border-line bg-surface p-2">
+          {sets.map((s) => {
+            const activa = editando?.id === s.id;
+            return (
+              <li
+                key={s.id}
+                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 font-mono text-sm ${
+                  activa ? "bg-accent/10 ring-1 ring-accent" : ""
+                }`}
               >
-                ×
-              </button>
-            </li>
-          ))}
+                {/* Tocar la serie la abre para corregir. Es el gesto que uno
+                    prueba primero, y antes no hacía nada. */}
+                <button
+                  onClick={() => corregir(s)}
+                  disabled={pending}
+                  className="flex flex-1 items-center gap-3 text-left disabled:opacity-50"
+                  aria-label={`Corregir serie ${s.setIndex}`}
+                >
+                  <span className="w-4 text-muted">{s.setIndex}</span>
+                  <span className="tabular-nums">
+                    {s.weightKg ?? "—"} kg × {s.reps ?? "—"}
+                  </span>
+                  {s.rir !== null && <span className="text-muted">RIR {s.rir}</span>}
+                </button>
+                <button
+                  onClick={() => {
+                    if (editando?.id === s.id) setEditando(null);
+                    onRemove(s.id);
+                  }}
+                  disabled={pending}
+                  className="px-2 text-muted transition hover:text-accent disabled:opacity-50"
+                  aria-label={`Borrar serie ${s.setIndex}`}
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
         </ol>
       )}
 
-      <VoiceButton
-        lang="es-MX"
-        idleLabel="Di la serie · «setenta por diez»"
-        onTranscript={(texto) => {
-          const serie = parseSpokenSet(texto);
-          if (!serie) return false;
-          if (serie.weightKg !== null) setPeso(String(serie.weightKg));
-          if (serie.reps !== null) setReps(String(serie.reps));
-          if (serie.rir !== null) setRir(String(serie.rir));
-          return true;
-        }}
-      />
+      {editando && (
+        <div className="flex items-center justify-between rounded-xl border border-accent bg-accent/10 px-4 py-2 text-sm">
+          <span className="font-medium">Corrigiendo la serie {editando.setIndex}</span>
+          <button onClick={cancelar} className="text-muted underline">
+            Cancelar
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
         <Campo ref={pesoRef} label="kg" value={peso} onChange={setPeso} />
@@ -394,12 +503,19 @@ function SetLogger({
         <Campo label="RIR" value={rir} onChange={setRir} />
         <button
           onClick={registrar}
-          disabled={pending}
-          className="self-end rounded-xl bg-accent px-5 py-3 text-lg font-medium text-white transition active:scale-[0.95] disabled:opacity-50"
+          disabled={pending || vacia}
+          aria-label={editando ? "Guardar corrección" : "Añadir serie"}
+          className="self-end rounded-xl bg-accent px-5 py-3 text-lg font-medium text-white transition active:scale-[0.95] disabled:opacity-40"
         >
-          +
+          {editando ? "✓" : "+"}
         </button>
       </div>
+
+      {!completa && !vacia && (
+        <p className="text-center text-xs text-muted">
+          Falta {valores.reps === null ? "las repeticiones" : "el peso"}
+        </p>
+      )}
 
       <button
         onClick={onNext}

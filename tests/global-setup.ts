@@ -42,12 +42,57 @@ export async function setup() {
     );
   }
 
+  await liberarLockDeMigracion(url);
+
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     env: { ...process.env, DATABASE_URL: url },
     stdio: "pipe",
   });
 
   process.env.TEST_SCHEMA_URL = url;
+}
+
+/**
+ * Libera el lock de migración que dejan las ejecuciones interrumpidas.
+ *
+ * `prisma migrate deploy` toma un lock consultivo (`pg_advisory_lock`). Si el
+ * proceso muere antes de soltarlo —Ctrl-C, un pipe que se cierra, el test
+ * runner que se cae— la sesión queda inactiva en el servidor con el lock
+ * puesto, y TODA ejecución posterior espera diez segundos y falla. El error que
+ * sale no menciona ningún lock huérfano, así que parece un problema de red.
+ *
+ * Solo se hace sobre la base de PRUEBAS, y solo con sesiones inactivas: una
+ * migración en curso de verdad está `active` y no se toca.
+ */
+async function liberarLockDeMigracion(url: string): Promise<void> {
+  const { PrismaClient } = await import("../src/generated/prisma/client");
+  const { PrismaNeon } = await import("@prisma/adapter-neon");
+  const db = new PrismaClient({ adapter: new PrismaNeon({ connectionString: url }) });
+
+  try {
+    const huerfanos = await db.$queryRawUnsafe<{ pid: number }[]>(
+      `SELECT l.pid
+         FROM pg_locks l
+         JOIN pg_stat_activity a ON a.pid = l.pid
+        WHERE l.locktype = 'advisory'
+          AND l.granted
+          AND a.state = 'idle'
+          AND a.pid <> pg_backend_pid()`,
+    );
+    for (const { pid } of huerfanos) {
+      await db.$queryRawUnsafe(`SELECT pg_terminate_backend($1)`, pid);
+    }
+    if (huerfanos.length > 0) {
+      console.warn(
+        `[pruebas] liberados ${huerfanos.length} lock(s) de migración huérfanos`,
+      );
+    }
+  } catch {
+    // Si esto falla, que falle la migración con su propio mensaje. Limpiar es
+    // una cortesía, no un requisito.
+  } finally {
+    await db.$disconnect();
+  }
 }
 
 /** Compara host y nombre de base, ignorando parámetros como `?schema=`. */

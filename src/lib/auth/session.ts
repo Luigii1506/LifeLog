@@ -24,9 +24,17 @@ const MINIMO = 8;
 function claveSecreta(): string {
   const secreto = (process.env.AUTH_SECRET || process.env.AUTH_PASSPHRASE || "").trim();
   if (secreto.length < MINIMO) {
+    // En local la causa casi siempre es la misma: `vercel env pull` deja
+    // `.env.local` con las variables Sensitive en blanco, y ese archivo tiene
+    // prioridad sobre `.env`. Editas `.env`, la ves ahí, y sigue fallando.
+    const tapadaPorEnvLocal =
+      process.env.NODE_ENV !== "production" && process.env.AUTH_PASSPHRASE === "";
     throw new Error(
       `AUTH_PASSPHRASE está vacía o es demasiado corta (mínimo ${MINIMO} caracteres). ` +
-        "Ponla en las variables de entorno del proyecto y vuelve a desplegar.",
+        (tapadaPorEnvLocal
+          ? "Está definida pero vacía: revisa `.env.local` — un `vercel env pull` la deja " +
+            "en blanco y tapa a `.env`."
+          : "Ponla en las variables de entorno del proyecto y vuelve a desplegar."),
     );
   }
   return secreto;

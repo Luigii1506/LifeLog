@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { logQuickFlow } from "@/app/actions";
+import { clearDraft, readDraft, writeDraft } from "@/lib/quick/draft";
 import {
   GuidedFlow,
   type FlowAnswer,
@@ -15,6 +16,12 @@ import {
  * Los dominios ligeros no ramifican: preguntan dos o tres cosas y guardan. El
  * `build` del payload vive en el servidor, así que aquí solo se recogen las
  * respuestas y se envían.
+ *
+ * Cada paso deja un borrador en el navegador. Salir a media pregunta y volver
+ * te devuelve donde estabas, igual que el gimnasio te devuelve al mismo grupo
+ * muscular. La diferencia es dónde vive el progreso: una serie es un hecho y
+ * va a la base; media respuesta no es nada y se queda en local (ver
+ * `lib/quick/draft.ts`).
  */
 export function QuickFlowRunner({
   flowId,
@@ -32,6 +39,22 @@ export function QuickFlowRunner({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [listo, setListo] = useState(false);
+  /** Se retoma un borrador: se avisa una vez y se calla. */
+  const [retomado, setRetomado] = useState(false);
+
+  // El borrador se lee tras montar, nunca durante el render: el servidor no
+  // puede ver localStorage y la diferencia rompería la hidratación.
+  useEffect(() => {
+    const draft = readDraft(flowId);
+    if (!draft) return;
+    const paso = Math.min(draft.step, steps.length - 1);
+    if (paso <= 0 && Object.keys(draft.answers).length === 0) return;
+    setIndice(paso);
+    setRespuestas(draft.answers);
+    setRetomado(true);
+    // steps y flowId no cambian mientras el componente vive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function guardar(finales: Record<string, string | number>) {
     startTransition(async () => {
@@ -40,7 +63,12 @@ export function QuickFlowRunner({
       const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const r = await logQuickFlow(flowId, finales, zona);
       if (!r.ok) setError(r.error);
-      else setListo(true);
+      else {
+        // El borrador muere con el evento: si sobreviviera, la tarjeta diría
+        // «a medias» sobre algo que ya está registrado.
+        clearDraft(flowId);
+        setListo(true);
+      }
     });
   }
 
@@ -56,9 +84,14 @@ export function QuickFlowRunner({
     // "skip" no escribe nada: el campo queda ausente, que es distinto de vacío.
 
     setRespuestas(siguientes);
+    setRetomado(false);
 
-    if (indice + 1 < steps.length) setIndice(indice + 1);
-    else guardar(siguientes);
+    if (indice + 1 < steps.length) {
+      setIndice(indice + 1);
+      writeDraft(flowId, indice + 1, siguientes);
+    } else {
+      guardar(siguientes);
+    }
   }
 
   if (listo) {
@@ -90,8 +123,21 @@ export function QuickFlowRunner({
         })}
         busy={pending}
         onAnswer={avanzar}
-        onBack={indice > 0 ? () => setIndice(indice - 1) : undefined}
+        onBack={
+          indice > 0
+            ? () => {
+                setRetomado(false);
+                setIndice(indice - 1);
+                writeDraft(flowId, indice - 1, respuestas);
+              }
+            : undefined
+        }
       />
+      {retomado && (
+        <p className="mt-3 text-center text-sm text-muted" role="status">
+          Retomado donde lo dejaste
+        </p>
+      )}
       {error && (
         <p
           role="status"

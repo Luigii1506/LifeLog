@@ -90,6 +90,37 @@ export async function logSet(input: {
   });
 }
 
+/**
+ * Corrige una serie ya registrada.
+ *
+ * Las series son DETALLE, no eventos: viven en su propia tabla y se pueden
+ * editar mientras la sesión siga abierta. El append-only (I-02) rige el log de
+ * eventos, y la sesión solo emite el suyo al cerrarse — así que corregir un
+ * peso mal tecleado no falsifica ningún histórico.
+ */
+export async function updateSet(
+  setId: string,
+  cambios: { reps?: number | null; weightKg?: number | null; rir?: number | null },
+) {
+  const set = await db.exerciseSet.findUnique({
+    where: { id: setId },
+    include: { session: { select: { status: true } } },
+  });
+  if (!set) throw new Error(`No existe la serie ${setId}`);
+  if (set.session.status !== "open") {
+    throw new OpenSessionError("No se puede editar una serie de una sesión cerrada.");
+  }
+
+  return db.exerciseSet.update({
+    where: { id: setId },
+    data: {
+      reps: cambios.reps ?? null,
+      weightKg: cambios.weightKg ?? null,
+      rir: cambios.rir ?? null,
+    },
+  });
+}
+
 export async function deleteSet(setId: string) {
   const set = await db.exerciseSet.findUnique({
     where: { id: setId },
@@ -99,7 +130,22 @@ export async function deleteSet(setId: string) {
   if (set.session.status !== "open") {
     throw new OpenSessionError("No se puede borrar una serie de una sesión cerrada.");
   }
+
   await db.exerciseSet.delete({ where: { id: setId } });
+
+  // Renumerar las que quedan. Sin esto, borrar la 2 de 3 dejaba «1, 3» — y
+  // una serie que se llama 3 cuando es la segunda hace dudar de si se borró
+  // la que era o se perdió otra.
+  const restantes = await db.exerciseSet.findMany({
+    where: { sessionId: set.sessionId, exerciseId: set.exerciseId },
+    orderBy: { setIndex: "asc" },
+    select: { id: true },
+  });
+  await Promise.all(
+    restantes.map((s, i) =>
+      db.exerciseSet.update({ where: { id: s.id }, data: { setIndex: i + 1 } }),
+    ),
+  );
 }
 
 export type CloseResult = {

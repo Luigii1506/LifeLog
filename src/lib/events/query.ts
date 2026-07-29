@@ -41,6 +41,27 @@ export type TimelineEntry = {
  * Excluye los eventos revocados (I-02): un evento anulado por una corrección
  * posterior no aparece, pero sigue en la base.
  */
+/**
+ * Los ids anulados de entre los que se le pasen (I-02).
+ *
+ * La corrección puede llegar CUALQUIER DÍA: te das cuenta mañana de que ayer
+ * registraste mal. Por eso se pregunta a la base en vez de buscar la anulación
+ * dentro de la misma ventana — así no reaparece un evento corregido tarde.
+ *
+ * Vive aquí y no en cada consulta para que la línea de tiempo y el estado de
+ * las tarjetas no puedan discrepar sobre qué cuenta como registrado.
+ */
+export async function revokedAmong(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const anulaciones = await db.event.findMany({
+    where: { revokesId: { in: ids } },
+    select: { revokesId: true },
+  });
+  return new Set(
+    anulaciones.map((a) => a.revokesId).filter((id): id is string => id !== null),
+  );
+}
+
 export async function timelineForDay(
   date: Date,
   timeZone?: string,
@@ -52,9 +73,7 @@ export async function timelineForDay(
     orderBy: { startedAt: "asc" },
   });
 
-  const revoked = new Set(
-    events.map((e) => e.revokesId).filter((id): id is string => id !== null),
-  );
+  const revoked = await revokedAmong(events.map((e) => e.id));
 
   return events
     .filter((e) => !revoked.has(e.id))

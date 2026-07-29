@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, HAY_BASE_DE_PRUEBAS } from "./setup-db";
 
 let cleanup: () => void;
@@ -116,3 +116,104 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("flujos guiados de dominios ligeros", () =
 function flowIds() {
   return ["wake", "sleep", "weight", "medication", "mood", "expense", "focus", "activity", "note"] as const;
 }
+
+// ── Estado de las tarjetas de Hoy ───────────────────────────────────────
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("pasos declarados en el catálogo", () => {
+  it("coinciden con los del flujo real", async () => {
+    // El catálogo duplica el número de pasos para que Hoy pueda decir
+    // «paso 2 de 3» sin construir los nueve flujos. Si alguien añade un paso
+    // y olvida la tabla, debe fallar aquí y no mentirle al usuario.
+    const { QUICK_FLOWS } = await import("@/lib/quick/catalog");
+    for (const entrada of QUICK_FLOWS) {
+      const spec = await flows.buildQuickFlow(entrada.id);
+      expect(spec, `no existe el flujo ${entrada.id}`).not.toBeNull();
+      expect(spec!.steps.length, `pasos de ${entrada.id}`).toBe(entrada.steps);
+    }
+  });
+});
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("estado del día en las tarjetas", () => {
+  let status: typeof import("@/lib/quick/status");
+  let emit: typeof import("@/lib/events/emit");
+
+  beforeAll(async () => {
+    status = await import("@/lib/quick/status");
+    emit = await import("@/lib/events/emit");
+  });
+
+  // `events` no se puede vaciar: un trigger hace cumplir I-02 (append-only) y
+  // rechaza el DELETE. Eso es la invariante funcionando, así que las pruebas
+  // miden el incremento en vez de partir de cero.
+  const TJ = "America/Tijuana";
+  async function cuenta(flow: string): Promise<number> {
+    return (await status.todayStatus(new Date(), TJ)).flows[flow].count;
+  }
+
+  it("registrar sube la cuenta de esa tarjeta y solo de esa", async () => {
+    const pesoAntes = await cuenta("weight");
+    const animoAntes = await cuenta("mood");
+
+    await emit.emit({
+      kind: "weight.logged",
+      payload: { kg: 78 },
+      timezone: TJ,
+      source: "test",
+    });
+
+    expect(await cuenta("weight")).toBe(pesoAntes + 1);
+    expect(await cuenta("mood")).toBe(animoAntes);
+  });
+
+  it("la hora que muestra la tarjeta es local, con formato de 24 h", async () => {
+    await emit.emit({
+      kind: "medication.taken",
+      payload: { name: "Vitamina D" },
+      timezone: TJ,
+      source: "test",
+    });
+
+    const e = await status.todayStatus(new Date(), TJ);
+    expect(e.flows.medication.lastAt).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it("corregir un evento no lo cuenta dos veces", async () => {
+    // I-02: corregir es emitir otro que anula al anterior. Si contara los dos,
+    // la tarjeta diría «2 hoy» por un único registro.
+    const antes = await cuenta("mood");
+
+    const original = await emit.emit({
+      kind: "mood.logged",
+      payload: { score: 3 },
+      timezone: TJ,
+      source: "test",
+    });
+    expect(await cuenta("mood")).toBe(antes + 1);
+
+    await emit.revoke(original.id, {
+      kind: "mood.logged",
+      payload: { score: 8 },
+      timezone: TJ,
+      source: "test:correccion",
+    });
+
+    expect(await cuenta("mood")).toBe(antes + 1);
+  });
+
+  it("actividad cuenta tanto al empezar como al terminar", async () => {
+    const antes = await cuenta("activity");
+    await emit.emit({
+      kind: "activity.started",
+      payload: { activity: "leer" },
+      timezone: TJ,
+      source: "test",
+    });
+    await emit.emit({
+      kind: "activity.ended",
+      payload: { activity: "leer", minutes: 30 },
+      timezone: TJ,
+      source: "test",
+    });
+    expect(await cuenta("activity")).toBe(antes + 2);
+  });
+});

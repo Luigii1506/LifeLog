@@ -8,6 +8,10 @@ import { useEffect, useRef, useState } from "react";
  * El audio lo procesa el sistema; no pasa por LifeLog. Se prueban todas las
  * alternativas que devuelve el reconocedor porque a veces la primera
  * transcripción no sirve y la segunda sí.
+ *
+ * Lo usa un único componente —el botón flotante— y por eso solo hay un
+ * reconocedor vivo a la vez. Cuando cada pantalla tenía el suyo, dos micrófonos
+ * montados podían pelearse por el permiso del sistema.
  */
 
 type Recognition = {

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { TimePicker } from "./time-picker";
-import { VoiceTime } from "./voice-time";
-import { VoiceButton } from "./voice-button";
+import { parseSpokenTime } from "@/lib/parse-spoken-time";
+import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
 import { leerNumero, normalizarPalabras } from "@/lib/spanish-numbers";
 
@@ -18,6 +18,11 @@ import { leerNumero, normalizarPalabras } from "@/lib/spanish-numbers";
  * Todos los datos que necesitan los pasos llegan calculados desde el servidor:
  * entre pregunta y pregunta no hay red, y por tanto no hay espera. La latencia
  * es lo que mata este patrón.
+ *
+ * La voz vive en el MOTOR, no en cada pantalla: cada tipo de paso declara cómo
+ * interpretar lo que oye y el botón flotante lo usa. Así toda lista de opciones
+ * hereda el dictado sin que nadie se acuerde de añadirlo, y el micrófono sigue
+ * estando siempre en el mismo punto de la pantalla.
  */
 
 export type FlowOption = {
@@ -184,6 +189,27 @@ function ChoiceStep({
 }) {
   const [custom, setCustom] = useState<string | null>(null);
 
+  // Un solo registro para los dos modos del paso: elegir de la lista y
+  // escribir algo que no está en ella. No puede haber dos `useVoiceTarget`
+  // condicionales —los hooks no se llaman a veces— así que decide dentro.
+  useVoiceTarget(custom !== null ? "Dilo y lo escribo" : "Di una opción", (texto) => {
+    if (custom !== null) {
+      setCustom(texto);
+      return true;
+    }
+    // `matchOption` tolera acentos, plurales y aproximaciones: quien habla no
+    // pronuncia la etiqueta exacta que muestra el botón.
+    const elegida = matchOption(texto, step.options);
+    if (!elegida) return false;
+    onAnswer({
+      stepId: step.id,
+      kind: "choice",
+      value: elegida.value,
+      label: elegida.label,
+    });
+    return true;
+  });
+
   if (custom !== null) {
     return (
       <form
@@ -223,23 +249,6 @@ function ChoiceStep({
 
   return (
     <div className="space-y-2">
-      {/* La voz vive en el MOTOR, no en cada pantalla: así toda lista de
-          opciones la hereda sin que nadie se acuerde de añadirla. */}
-      <VoiceButton
-        idleLabel="Dilo"
-        onTranscript={(texto) => {
-          const elegida = matchOption(texto, step.options);
-          if (!elegida) return false;
-          onAnswer({
-            stepId: step.id,
-            kind: "choice",
-            value: elegida.value,
-            label: elegida.label,
-          });
-          return true;
-        }}
-      />
-
       <div
         className={`grid gap-2 ${
           step.columns === 1
@@ -315,6 +324,15 @@ function QuantityStep({
   const [otro, setOtro] = useState(false);
   const unidad = step.unit === "unit" ? "" : ` ${step.unit}`;
 
+  // «setenta kilos», «diez», «dos y media». El número puede venir antes o
+  // después de la unidad, y en letra o en cifra.
+  useVoiceTarget("Di la cantidad", (texto) => {
+    const leido = leerNumero(normalizarPalabras(texto));
+    if (!leido) return false;
+    onAnswer({ stepId: step.id, kind: "quantity", value: leido.valor });
+    return true;
+  });
+
   if (otro) {
     return (
       <form
@@ -357,16 +375,6 @@ function QuantityStep({
 
   return (
     <div className="space-y-2">
-      <VoiceButton
-        idleLabel="Dilo"
-        onTranscript={(texto) => {
-          const leido = leerNumero(normalizarPalabras(texto));
-          if (!leido) return false;
-          onAnswer({ stepId: step.id, kind: "quantity", value: leido.valor });
-          return true;
-        }}
-      />
-
       <div className="grid grid-cols-4 gap-2">
         {step.presets.map((valor) => (
           <button
@@ -416,6 +424,13 @@ function TextStep({
   const [valor, setValor] = useState("");
   const Campo = step.multiline ? "textarea" : "input";
 
+  // Dictado literal: aquí no hay nada que interpretar, lo dicho es el valor.
+  // Es el caso que más tiempo ahorra — escribir una nota en el móvil es lento.
+  useVoiceTarget("Dilo y lo escribo", (texto) => {
+    setValor(texto);
+    return true;
+  });
+
   return (
     <form
       onSubmit={(e) => {
@@ -435,14 +450,6 @@ function TextStep({
         rows={step.multiline ? 4 : undefined}
         className="w-full resize-none rounded-xl border border-line bg-background px-4 py-4 text-lg outline-none focus:border-accent"
       />
-      <VoiceButton
-        idleLabel="Dilo"
-        onTranscript={(texto) => {
-          setValor(texto);
-          return true;
-        }}
-      />
-
       <button
         type="submit"
         disabled={busy || !valor.trim()}
@@ -484,10 +491,18 @@ function TimeStep({
 
   const texto = `${String(hora.hour).padStart(2, "0")}:${String(hora.minute).padStart(2, "0")}`;
 
+  // «cinco y media», «siete y cuarto», «las ocho». Mover la rueda con el dedo
+  // hasta una hora concreta cuesta varios segundos; decirla, uno.
+  useVoiceTarget("Di la hora", (dicho) => {
+    const leida = parseSpokenTime(dicho);
+    if (!leida) return false;
+    setHora(leida);
+    return true;
+  });
+
   return (
     <div className="space-y-5">
       <TimePicker value={hora} onChange={setHora} />
-      <VoiceTime onTime={setHora} />
       <button
         disabled={busy}
         onClick={() => onAnswer({ stepId: step.id, kind: "time", value: texto })}

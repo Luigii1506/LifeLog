@@ -7,6 +7,11 @@
   --line: #e5e1da;
   --surface: #ffffff;
   --accent: #b4551f;
+
+  /* Estado «hecho hoy». Verde apagado, del mismo mundo que el terracota:
+     tiene que leerse de un vistazo sin gritar más que la acción siguiente. */
+  --done: #3f7d52;
+  --done-surface: #eef5ef;
 }
 
 @theme inline {
@@ -16,6 +21,8 @@
   --color-line: var(--line);
   --color-surface: var(--surface);
   --color-accent: var(--accent);
+  --color-done: var(--done);
+  --color-done-surface: var(--done-surface);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -28,6 +35,8 @@
     --line: #2c2a25;
     --surface: #1b1a16;
     --accent: #e08a4c;
+    --done: #6faa80;
+    --done-surface: #1a241c;
   }
 }
 

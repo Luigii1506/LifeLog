@@ -12,8 +12,11 @@ describe("parentOf — el padre lógico, no el historial", () => {
     expect(parentOf("/food")).toBe("/");
   });
 
-  it("un flujo guiado de comida vuelve a comida, no al home", () => {
-    expect(parentOf("/food/guiado/desayuno")).toBe("/food");
+  it("comida es una sola ruta, como el gimnasio", () => {
+    // Antes el flujo guiado vivía en `/food/guiado/<tipo>` y volvía a `/food`.
+    // Al unificar comida con gimnasio esa ruta desapareció: `/food` es a la vez
+    // la entrada y el flujo, y de ahí se sale a Hoy.
+    expect(parentOf("/food")).toBe("/");
   });
 
   it("un registro rápido vuelve al home", () => {
@@ -55,5 +58,38 @@ describe("órdenes de navegación por voz", () => {
 
   it("no confunden una orden con otra", () => {
     expect(decir("qué tal el clima")).toBeUndefined();
+  });
+});
+
+// ── Profundidad del gimnasio ────────────────────────────────────────────
+
+describe("atrás dentro del gimnasio", () => {
+  const sp = (q: string) => new URLSearchParams(q);
+
+  it("desde una serie vuelve a los ejercicios, no a Hoy", () => {
+    // El caso que motivó esto: registrando series, «atrás» decía «Gimnasio» y
+    // saltaba a Hoy. Lo obvio al acabar un ejercicio es volver a la lista del
+    // mismo grupo, igual que el grupo se queda pegado al elegir.
+    expect(parentOf("/gym", sp("ejercicio=01ABC"))).toBe("/gym");
+  });
+
+  it("desde la lista de un grupo vuelve al selector de grupo", () => {
+    expect(parentOf("/gym", sp("grupo=pecho"))).toBe("/gym?grupo=");
+  });
+
+  it("desde el selector de grupo sale a Hoy", () => {
+    // `?grupo=` vacío es distinto de ausente: es la forma de PEDIR el selector.
+    expect(parentOf("/gym", sp("grupo="))).toBe("/");
+  });
+
+  it("sin parámetros sale a Hoy", () => {
+    expect(parentOf("/gym", sp(""))).toBe("/");
+    expect(parentOf("/gym")).toBe("/");
+  });
+
+  it("el ejercicio manda sobre el grupo", () => {
+    // Estando en una serie, da igual qué grupo diga la URL: la pantalla de la
+    // que vienes es la lista de ejercicios.
+    expect(parentOf("/gym", sp("grupo=pecho&ejercicio=01ABC"))).toBe("/gym");
   });
 });

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { openWorkout } from "@/app/gym/actions";
-import { VoiceButton } from "@/components/guided/voice-button";
+import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
 
 export type GroupCard = {
@@ -41,28 +41,30 @@ export function StartWorkout({
 
   function empezar(group: string | null, routineId?: string) {
     startTransition(async () => {
-      const r = await openWorkout(routineId ?? null);
+      // La zona la sabe el navegador. En el servidor es UTC, y una sesión
+      // con la zona equivocada cae en el día que no es.
+      const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const r = await openWorkout(routineId ?? null, zona);
       if (!r.ok) return setError(r.error);
       router.push(`/gym?grupo=${encodeURIComponent(group ?? "")}`);
     });
   }
 
+  // Decir «pecho» empieza el entrenamiento de pecho. Elegir qué trabajas ES
+  // empezar; no hay un paso intermedio que confirmar.
+  useVoiceTarget("Di el grupo · «pecho»", (texto) => {
+    const elegido = matchOption(
+      texto,
+      groups.map((g) => ({ value: g.group, label: g.group })),
+    );
+    if (!elegido) return false;
+    empezar(elegido.value);
+    return true;
+  });
+
   return (
     <div className="space-y-5">
       <h2 className="text-xl font-semibold tracking-tight">¿Qué vas a trabajar?</h2>
-
-      <VoiceButton
-        idleLabel="Dilo · «pecho»"
-        onTranscript={(texto) => {
-          const elegido = matchOption(
-            texto,
-            groups.map((g) => ({ value: g.group, label: g.group })),
-          );
-          if (!elegido) return false;
-          empezar(elegido.value);
-          return true;
-        }}
-      />
 
       <div className="grid grid-cols-2 gap-2">
         {groups.map((g) => (

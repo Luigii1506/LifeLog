@@ -10,6 +10,7 @@ import {
   logSet,
   OpenSessionError,
   startSession,
+  updateSet,
 } from "@/lib/gym/session";
 
 export type GymResult = { ok: true } | { ok: false; error: string };
@@ -20,9 +21,12 @@ function fail(error: unknown): GymResult {
   return { ok: false, error: "No se pudo completar la operación" };
 }
 
-export async function startWorkout(routineId: string | null): Promise<GymResult> {
+export async function startWorkout(
+  routineId: string | null,
+  timeZone: string,
+): Promise<GymResult> {
   try {
-    await startSession({ routineId });
+    await startSession({ routineId, timeZone });
   } catch (error) {
     return fail(error);
   }
@@ -40,6 +44,19 @@ export async function addSet(input: {
 }): Promise<GymResult> {
   try {
     await logSet(input);
+  } catch (error) {
+    return fail(error);
+  }
+  revalidatePath("/gym");
+  return { ok: true };
+}
+
+export async function editSet(
+  setId: string,
+  cambios: { weightKg: number | null; reps: number | null; rir: number | null },
+): Promise<GymResult> {
+  try {
+    await updateSet(setId, cambios);
   } catch (error) {
     return fail(error);
   }
@@ -113,10 +130,13 @@ export async function createExercise(
  * Si ya hay una sesión abierta no crea otra: entrar dos veces desde el home
  * no debe duplicar el entrenamiento.
  */
-export async function openWorkout(routineId?: string | null): Promise<GymResult> {
+export async function openWorkout(
+  routineId: string | null,
+  timeZone: string,
+): Promise<GymResult> {
   try {
     const abierta = await db.workoutSession.findFirst({ where: { status: "open" } });
-    if (!abierta) await startSession({ routineId: routineId ?? null });
+    if (!abierta) await startSession({ routineId: routineId ?? null, timeZone });
   } catch (error) {
     return fail(error);
   }

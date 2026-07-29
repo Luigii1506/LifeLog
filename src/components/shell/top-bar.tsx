@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { parentOf, titleOf } from "@/lib/navigation";
 
 /**
@@ -13,10 +13,14 @@ import { parentOf, titleOf } from "@/lib/navigation";
  *
  * A la izquierda porque es donde todo el mundo lo busca, y grande porque un
  * objetivo de 24 px no se acierta caminando.
+ *
+ * Lee los parámetros de la URL además de la ruta: en el gimnasio la
+ * profundidad vive ahí, y sin ellos «atrás» desde una serie saltaba hasta Hoy.
  */
 export function TopBar() {
   const pathname = usePathname();
-  const padre = parentOf(pathname);
+  const search = useSearchParams();
+  const padre = parentOf(pathname, search);
   const titulo = titleOf(pathname);
 
   if (!padre) return null;

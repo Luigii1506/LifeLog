@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { Timeline } from "@/components/timeline";
 import { EndActivity } from "@/components/quick/end-activity";
-import { VoiceLauncher } from "@/components/quick/voice-launcher";
+import { TodayCard } from "@/components/quick/today-card";
 import { openActivities, timelineForDay } from "@/lib/events/query";
 import { QUICK_FLOWS } from "@/lib/quick/catalog";
+import { todayStatus } from "@/lib/quick/status";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +13,21 @@ export const dynamic = "force-dynamic";
  * La pregunta es «¿qué quieres registrar?» y cada tarjeta entra en su propio
  * flujo. Los dominios profundos van arriba y más grandes porque son los que
  * más se usan y los que más pasos ahorran.
+ *
+ * Cada tarjeta lleva su estado del día —pendiente, a medias, hecho— porque la
+ * pregunta real de las siete de la tarde no es «¿qué registro?» sino «¿ya me
+ * pesé?». Sin el estado hay que bajar a leer la línea de tiempo, y lo que
+ * ocurre en la práctica es que registras dos veces o no registras.
  */
 export default async function TodayPage() {
   const now = new Date();
-  const [entries, abiertas] = await Promise.all([
+  const [entries, abiertas, estado] = await Promise.all([
     timelineForDay(now),
     openActivities(now),
+    todayStatus(now),
   ]);
+
+  const hechos = QUICK_FLOWS.filter((f) => estado.flows[f.id]?.count > 0).length;
 
   return (
     <main className="py-6">
@@ -42,35 +50,45 @@ export default async function TodayPage() {
         </div>
       )}
 
-      <h2 className="mb-3 text-xl font-semibold tracking-tight">
-        ¿Qué quieres registrar?
-      </h2>
-
-      <div className="mb-3">
-        <VoiceLauncher
-          destinations={[
-            { value: "/gym", label: "gimnasio pesas entrenar entrenamiento" },
-            { value: "/food", label: "comida comer desayuno cena almuerzo" },
-            ...QUICK_FLOWS.map((f) => ({
-              value: `/registrar/${f.id}`,
-              label: f.label,
-            })),
-          ]}
-        />
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-xl font-semibold tracking-tight">
+          ¿Qué quieres registrar?
+        </h2>
+        {hechos > 0 && (
+          <span className="text-xs tabular-nums text-muted">
+            {hechos} de {QUICK_FLOWS.length}
+          </span>
+        )}
       </div>
 
+
       <div className="grid grid-cols-2 gap-2">
-        <Tarjeta href="/gym" icon="🏋️" label="Gimnasio" destacada />
-        <Tarjeta href="/food" icon="🍽️" label="Comida" destacada />
+        <TodayCard
+          href="/gym"
+          icon="🏋️"
+          label="Gimnasio"
+          destacada
+          status={{ count: estado.gym.count, lastAt: null, open: estado.gym.open }}
+        />
+        <TodayCard
+          href="/food"
+          icon="🍽️"
+          label="Comida"
+          destacada
+          status={{ count: estado.food.count, lastAt: null, open: estado.food.open }}
+        />
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-2">
         {QUICK_FLOWS.map((flujo) => (
-          <Tarjeta
+          <TodayCard
             key={flujo.id}
             href={`/registrar/${flujo.id}`}
             icon={flujo.icon}
             label={flujo.label}
+            flowId={flujo.id}
+            totalSteps={flujo.steps}
+            status={estado.flows[flujo.id] ?? { count: 0, lastAt: null }}
           />
         ))}
       </div>
@@ -83,30 +101,6 @@ export default async function TodayPage() {
         <Timeline entries={entries} />
       </section>
     </main>
-  );
-}
-
-function Tarjeta({
-  href,
-  icon,
-  label,
-  destacada,
-}: {
-  href: string;
-  icon: string;
-  label: string;
-  destacada?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-line bg-surface text-center transition active:scale-[0.96] ${
-        destacada ? "py-7" : "py-5"
-      }`}
-    >
-      <span className={destacada ? "text-3xl" : "text-2xl"}>{icon}</span>
-      <span className={`font-medium ${destacada ? "" : "text-sm"}`}>{label}</span>
-    </Link>
   );
 }
 

@@ -237,3 +237,70 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("récords personales", () => {
     expect(queries.estimatedOneRepMax(60, 1)).toBe(60);
   });
 });
+
+// ── Zona horaria ────────────────────────────────────────────────────────
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("zona horaria de la sesión", () => {
+  it("guarda la del usuario, no la del servidor", async () => {
+    // El fallo real que esto previene: el parámetro existía en `startSession`
+    // pero ninguna acción lo pasaba, así que toda sesión se guardaba como UTC
+    // y en Tijuana caía siete horas desplazada — a veces en el día anterior.
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    expect(s.timezone).toBe("America/Tijuana");
+    await gym.discardSession(s.id);
+  });
+
+  it("sin zona explícita cae a UTC, que es honesto pero no debe ocurrir", async () => {
+    const s = await gym.startSession({});
+    expect(s.timezone).toBe("UTC");
+    await gym.discardSession(s.id);
+  });
+});
+
+// ── Corregir lo registrado ──────────────────────────────────────────────
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("editar y borrar series", () => {
+  it("editar una serie cambia sus valores sin crear otra", async () => {
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    const serie = await gym.logSet({
+      sessionId: s.id, exerciseId: pressMilitarId, weightKg: 60, reps: 10, rir: 2,
+    });
+
+    await gym.updateSet(serie.id, { weightKg: 65, reps: 8, rir: 1 });
+
+    const detalle = await queries.getOpenSession();
+    expect(detalle!.sets).toHaveLength(1);
+    expect(detalle!.sets[0].weightKg).toBe(65);
+    expect(detalle!.sets[0].reps).toBe(8);
+    expect(detalle!.sets[0].rir).toBe(1);
+    await gym.closeSession(s.id);
+  });
+
+  it("borrar una serie del medio renumera las que quedan", async () => {
+    // Sin renumerar quedaba «1, 3»: una serie que se llama 3 siendo la segunda
+    // hace dudar de si se borró la que era o se perdió otra.
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    const a = await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 10 });
+    const b = await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 9 });
+    const c = await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 8 });
+    expect([a.setIndex, b.setIndex, c.setIndex]).toEqual([1, 2, 3]);
+
+    await gym.deleteSet(b.id);
+
+    const detalle = await queries.getOpenSession();
+    expect(detalle!.sets.map((x) => x.setIndex).sort()).toEqual([1, 2]);
+    expect(detalle!.sets.map((x) => x.reps).sort((p, q) => q! - p!)).toEqual([10, 8]);
+    await gym.closeSession(s.id);
+  });
+
+  it("no se puede editar una serie de una sesión cerrada", async () => {
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    const serie = await gym.logSet({
+      sessionId: s.id, exerciseId: pressMilitarId, weightKg: 60, reps: 10,
+    });
+    await gym.closeSession(s.id);
+
+    await expect(gym.updateSet(serie.id, { weightKg: 99, reps: 1, rir: null }))
+      .rejects.toThrow(/cerrada/);
+  });
+});
