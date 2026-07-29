@@ -54,3 +54,7 @@ next-env.d.ts
 # prisma client generado
 /src/generated
 .env*.local
+
+# La plantilla SÍ se versiona: documenta qué variables hacen falta.
+# La negación va al final: git aplica la última regla que casa.
+!.env.example
