@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import type { FlowStep } from "@/components/guided/guided-flow";
 import { type EventKind } from "@/lib/events/kinds";
+import type { QuickFlowId } from "./catalog";
+
+export type { QuickFlowId };
 
 /**
  * Flujos de captura guiada para los dominios ligeros.
@@ -14,16 +17,6 @@ import { type EventKind } from "@/lib/events/kinds";
  * propio flujo porque necesitan ramificación y estado.
  */
 
-export type QuickFlowId =
-  | "wake"
-  | "sleep"
-  | "weight"
-  | "medication"
-  | "mood"
-  | "expense"
-  | "focus"
-  | "activity"
-  | "note";
 
 export type QuickFlowSpec = {
   id: QuickFlowId;
@@ -296,15 +289,3 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
   }
 }
 
-/** Catálogo para el lanzador del home. No consulta la base. */
-export const QUICK_FLOWS: { id: QuickFlowId; label: string; icon: string }[] = [
-  { id: "wake", label: "Desperté", icon: "🌅" },
-  { id: "sleep", label: "Sueño", icon: "😴" },
-  { id: "mood", label: "Ánimo", icon: "😊" },
-  { id: "weight", label: "Peso", icon: "⚖️" },
-  { id: "medication", label: "Medicamento", icon: "💊" },
-  { id: "expense", label: "Gasto", icon: "💸" },
-  { id: "focus", label: "Trabajo", icon: "🎯" },
-  { id: "activity", label: "Actividad", icon: "⏱" },
-  { id: "note", label: "Nota", icon: "📝" },
-];

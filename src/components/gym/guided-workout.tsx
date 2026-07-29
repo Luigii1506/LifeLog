@@ -467,9 +467,6 @@ function Resumen({
           </ul>
         </div>
       )}
-      <a href="/" className="block pt-2 text-sm text-muted hover:text-foreground">
-        ← Volver a Hoy
-      </a>
     </div>
   );
 }

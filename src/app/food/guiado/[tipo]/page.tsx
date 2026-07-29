@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GuidedMeal, type Suggestion } from "@/components/food/guided-meal";
 import { MEAL_TYPES } from "@/lib/food/queries";
@@ -31,15 +30,7 @@ export default async function GuidedMealPage({
   const presets = Object.fromEntries(sets) as Record<string, number[]>;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8">
-      <header className="mb-4 flex items-baseline justify-between">
-        <h1 className="text-sm font-medium tracking-[0.12em] text-muted uppercase">
-          {tipo}
-        </h1>
-        <Link href="/food" className="text-sm text-muted hover:text-foreground">
-          Cancelar
-        </Link>
-      </header>
+    <main className="py-4">
 
       <GuidedMeal
         mealType={tipo}

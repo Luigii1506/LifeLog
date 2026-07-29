@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { GuidedWorkout } from "@/components/gym/guided-workout";
 import { StartWorkout } from "@/components/gym/start-workout";
 import { getOpenSession, getRoutines } from "@/lib/gym/queries";
@@ -108,15 +107,7 @@ export default async function GymPage({
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8">
-      <header className="mb-5 flex items-baseline justify-between">
-        <h1 className="text-sm font-medium tracking-[0.12em] text-muted uppercase">
-          🏋️ Gimnasio
-        </h1>
-        <Link href="/" className="text-sm text-muted hover:text-foreground">
-          Hoy
-        </Link>
-      </header>
+    <main className="py-4">
       {children}
     </main>
   );

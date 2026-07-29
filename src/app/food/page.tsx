@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ActiveMeal } from "@/components/food/active-meal";
 import { StartMeal } from "@/components/food/start-meal";
 import {
@@ -86,13 +85,7 @@ export default async function FoodPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8 sm:py-12">
-      <header className="mb-8 flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Alimentación</h1>
-        <Link href="/" className="text-sm text-muted hover:text-foreground">
-          ← Hoy
-        </Link>
-      </header>
+    <main className="py-4">
       {children}
     </main>
   );

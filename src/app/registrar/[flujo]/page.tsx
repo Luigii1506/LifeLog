@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { QuickFlowRunner } from "@/components/quick/quick-flow-runner";
 import { buildQuickFlow, type QuickFlowId } from "@/lib/quick/flows";
@@ -15,15 +14,7 @@ export default async function RegistrarPage({
   if (!spec) notFound();
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8">
-      <header className="mb-4 flex items-baseline justify-between">
-        <span className="text-sm font-medium tracking-[0.12em] text-muted uppercase">
-          {spec.icon} {spec.label}
-        </span>
-        <Link href="/" className="text-sm text-muted hover:text-foreground">
-          Cancelar
-        </Link>
-      </header>
+    <main className="py-4">
 
       <QuickFlowRunner
         flowId={spec.id}

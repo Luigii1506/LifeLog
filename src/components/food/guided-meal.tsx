@@ -183,9 +183,6 @@ export function GuidedMeal({
           {elegidos.length} {elegidos.length === 1 ? "cosa" : "cosas"}
           {hecho.kcal ? ` · ≈ ${Math.round(hecho.kcal)} kcal` : ""}
         </p>
-        <a href="/" className="block pt-2 text-sm text-muted hover:text-foreground">
-          ← Volver a Hoy
-        </a>
       </div>
     );
   }

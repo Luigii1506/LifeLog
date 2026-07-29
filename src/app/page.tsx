@@ -3,7 +3,7 @@ import { Timeline } from "@/components/timeline";
 import { EndActivity } from "@/components/quick/end-activity";
 import { VoiceLauncher } from "@/components/quick/voice-launcher";
 import { openActivities, timelineForDay } from "@/lib/events/query";
-import { QUICK_FLOWS } from "@/lib/quick/flows";
+import { QUICK_FLOWS } from "@/lib/quick/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export default async function TodayPage() {
   ]);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8 sm:py-12">
+    <main className="py-6">
       <header className="mb-7">
         <p className="text-sm text-muted">{saludo(now)}</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
