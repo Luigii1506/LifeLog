@@ -15,15 +15,29 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+/**
+ * La integración de Vercel con Neon inyecta la cadena con distintos nombres
+ * según la versión. Se aceptan todos: fallar por el nombre de una variable
+ * cuando la base está ahí es la peor forma de perder una tarde.
+ */
+export function connectionString(): string | undefined {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    undefined
+  );
+}
+
 function crearCliente(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+  const url = connectionString();
+  if (!url) {
     throw new Error(
       "Falta DATABASE_URL. En local va en .env; en Vercel, en las variables de entorno del proyecto.",
     );
   }
   return new PrismaClient({
-    adapter: new PrismaNeon({ connectionString }),
+    adapter: new PrismaNeon({ connectionString: url }),
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 }

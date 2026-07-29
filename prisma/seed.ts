@@ -1,3 +1,6 @@
+// tsx no lee .env por su cuenta; Next sí. Sin esto la siembra no
+// encuentra la base aunque esté configurada.
+import "dotenv/config";
 import { seedEventSchemas } from "../src/lib/events/seed-schemas";
 import { db } from "../src/lib/db";
 
