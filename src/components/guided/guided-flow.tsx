@@ -34,6 +34,10 @@ export type FlowStep =
       customLabel?: string;
       /** Avanza sin elegir nada. */
       skipLabel?: string;
+      /** Cómo convertir el valor elegido al construir el payload. */
+      coerce?: "number" | "string";
+      /** Rejilla de una columna, para escalas largas. */
+      columns?: 1 | 2 | 3 | 5;
     }
   | {
       type: "quantity";
@@ -44,6 +48,17 @@ export type FlowStep =
       unit: string;
       /** Se preselecciona; el caso normal es confirmar, no elegir. */
       suggested?: number | null;
+      /** Avanza sin responder. */
+      skipLabel?: string;
+    }
+  | {
+      type: "text";
+      id: string;
+      question: string;
+      hint?: string;
+      placeholder?: string;
+      multiline?: boolean;
+      skipLabel?: string;
     };
 
 export type FlowAnswer =
@@ -89,8 +104,10 @@ export function GuidedFlow({
         <div className="mt-6">
           {step.type === "choice" ? (
             <ChoiceStep step={step} busy={busy} onAnswer={onAnswer} />
-          ) : (
+          ) : step.type === "quantity" ? (
             <QuantityStep step={step} busy={busy} onAnswer={onAnswer} />
+          ) : (
+            <TextStep step={step} busy={busy} onAnswer={onAnswer} />
           )}
         </div>
       </div>
@@ -189,7 +206,17 @@ function ChoiceStep({
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
+      <div
+        className={`grid gap-2 ${
+          step.columns === 1
+            ? "grid-cols-1"
+            : step.columns === 3
+              ? "grid-cols-3"
+              : step.columns === 5
+                ? "grid-cols-5"
+                : "grid-cols-2"
+        }`}
+      >
         {step.options.map((opcion) => (
           <button
             key={opcion.value}
@@ -202,7 +229,11 @@ function ChoiceStep({
                 label: opcion.label,
               })
             }
-            className="flex min-h-24 flex-col items-start justify-between rounded-xl border border-line bg-surface p-4 text-left transition active:scale-[0.97] disabled:opacity-50"
+            className={`flex flex-col items-start justify-between rounded-xl border border-line bg-surface text-left transition active:scale-[0.97] disabled:opacity-50 ${
+              step.columns && step.columns >= 3
+                ? "items-center p-3 text-center"
+                : "min-h-24 p-4"
+            }`}
           >
             {opcion.icon && <span className="text-2xl leading-none">{opcion.icon}</span>}
             <span className="mt-2">
@@ -316,6 +347,67 @@ function QuantityStep({
       >
         Otra cantidad
       </button>
+      {step.skipLabel && (
+        <button
+          disabled={busy}
+          onClick={() => onAnswer({ stepId: step.id, kind: "skip" })}
+          className="w-full py-3 text-sm text-muted"
+        >
+          {step.skipLabel}
+        </button>
+      )}
     </div>
+  );
+}
+
+function TextStep({
+  step,
+  busy,
+  onAnswer,
+}: {
+  step: Extract<FlowStep, { type: "text" }>;
+  busy?: boolean;
+  onAnswer: (a: FlowAnswer) => void;
+}) {
+  const [valor, setValor] = useState("");
+  const Campo = step.multiline ? "textarea" : "input";
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const limpio = valor.trim();
+        if (limpio) onAnswer({ stepId: step.id, kind: "custom", value: limpio });
+      }}
+      className="space-y-3"
+    >
+      <Campo
+        autoFocus
+        value={valor}
+        onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+          setValor(e.target.value)
+        }
+        placeholder={step.placeholder}
+        rows={step.multiline ? 4 : undefined}
+        className="w-full resize-none rounded-xl border border-line bg-background px-4 py-4 text-lg outline-none focus:border-accent"
+      />
+      <button
+        type="submit"
+        disabled={busy || !valor.trim()}
+        className="w-full rounded-xl bg-foreground py-4 font-medium text-background disabled:opacity-40"
+      >
+        Continuar
+      </button>
+      {step.skipLabel && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onAnswer({ stepId: step.id, kind: "skip" })}
+          className="w-full py-2 text-sm text-muted"
+        >
+          {step.skipLabel}
+        </button>
+      )}
+    </form>
   );
 }

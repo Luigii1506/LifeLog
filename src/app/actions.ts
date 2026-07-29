@@ -75,3 +75,21 @@ export async function logOneTap(kind: string): Promise<ActionResult> {
   };
   return logEvent(kind, payloads[kind] ?? {});
 }
+
+/**
+ * Cierra un flujo guiado de dominio ligero.
+ *
+ * El cliente manda las respuestas crudas; el payload se arma AQUÍ, con la
+ * misma especificación que generó los pasos. Así el cliente no puede inventar
+ * campos ni saltarse la forma del evento.
+ */
+export async function logQuickFlow(
+  flowId: string,
+  answers: Record<string, string | number>,
+): Promise<ActionResult> {
+  const { buildQuickFlow } = await import("@/lib/quick/flows");
+  const spec = await buildQuickFlow(flowId as never);
+  if (!spec) return { ok: false, error: `Flujo desconocido: ${flowId}` };
+
+  return logEvent(spec.kind, spec.build(answers), { source: "app:guiado" });
+}
