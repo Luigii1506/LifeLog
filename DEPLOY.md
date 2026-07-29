@@ -1,5 +1,16 @@
 # Despliegue
 
+## vercel.json
+
+El framework se declara en el repositorio, no en el panel.
+
+Vercel no detectó el proyecto como Next.js y construyó la raíz como si fueran
+archivos estáticos: despliegues «Ready» de 0 ms que servían 404 en todas las
+rutas. Verde en el panel, vacío en realidad.
+
+Declararlo aquí lo hace reproducible y a prueba de que alguien toque un
+desplegable por error.
+
 ## Variables de entorno en Vercel
 
 La integración con Neon inyecta la cadena de conexión sola. Falta una:
