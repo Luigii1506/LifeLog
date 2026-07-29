@@ -97,6 +97,35 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("ciclo de vida de la comida", () => {
     expect(item.foodId).toBeNull();
   });
 
+  it("una comida vacía se descarta, no se cierra", async () => {
+    // Cerrarla emitiría un meal.logged sin nada dentro: una comida que nunca
+    // ocurrió, en la línea de tiempo, para siempre.
+    const vacia = await food.startMeal({ mealType: "desayuno" });
+    const eventosAntes = await db.event.count({ where: { kind: "meal.logged" } });
+
+    await food.startMeal({ mealType: "comida" });
+
+    expect(await queries.getMeal(vacia.id)).toBeNull();
+    expect(await db.event.count({ where: { kind: "meal.logged" } })).toBe(eventosAntes);
+  });
+
+  it("una comida con items sí se cierra al abrir la siguiente", async () => {
+    const conCosas = await food.startMeal({ mealType: "desayuno" });
+    await food.addItem({ mealId: conCosas.id, foodId: huevoId, amount: 2 });
+
+    await food.startMeal({ mealType: "comida" });
+
+    const anterior = await queries.getMeal(conCosas.id);
+    expect(anterior!.status).toBe("closed");
+    expect(anterior!.eventId).not.toBeNull();
+  });
+
+  it("no se descarta una comida con items: se cierra", async () => {
+    const m = await food.startMeal({ mealType: "cena" });
+    await food.addItem({ mealId: m.id, foodId: huevoId, amount: 1 });
+    await expect(food.discardMeal(m.id)).rejects.toThrow(/Ciérrala/);
+  });
+
   it("un item sin nombre ni alimento es un error", async () => {
     const m = await food.startMeal({ mealType: "snack" });
     await expect(food.addItem({ mealId: m.id, amount: 100 })).rejects.toThrow(/nombre/);

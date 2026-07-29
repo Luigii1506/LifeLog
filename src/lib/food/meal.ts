@@ -33,8 +33,17 @@ export async function startMeal(input: {
   startedAt?: Date;
   source?: string;
 }) {
-  const abierta = await db.meal.findFirst({ where: { status: "open" } });
-  if (abierta) await closeMeal(abierta.id);
+  const abierta = await db.meal.findFirst({
+    where: { status: "open" },
+    include: { _count: { select: { items: true } } },
+  });
+  if (abierta) {
+    // Una comida vacía se descarta, no se cierra: cerrarla emitiría un
+    // meal.logged sin nada dentro y ensuciaría la línea de tiempo con una
+    // comida que nunca ocurrió. Abrir el flujo y arrepentirse es normal.
+    if (abierta._count.items === 0) await discardMeal(abierta.id);
+    else await closeMeal(abierta.id);
+  }
 
   const startedAt = input.startedAt ?? new Date();
   const meal = await db.meal.create({
@@ -185,6 +194,29 @@ export async function duplicateMeal(sourceMealId: string, mealType?: string) {
   }
 
   return nueva;
+}
+
+/**
+ * Descarta una comida abierta sin emitir evento. Solo si está vacía.
+ *
+ * El gimnasio tenía `discardSession` y la comida no: se podía abrir el flujo,
+ * arrepentirse, y quedaba colgando para siempre sin forma de quitarla.
+ */
+export async function discardMeal(mealId: string) {
+  const meal = await db.meal.findUnique({
+    where: { id: mealId },
+    include: { _count: { select: { items: true } } },
+  });
+  if (!meal) return;
+  if (meal.status !== "open") {
+    throw new MealError("Solo se descartan comidas abiertas.");
+  }
+  if (meal._count.items > 0) {
+    throw new MealError(
+      "La comida tiene items registrados. Ciérrala en vez de descartarla.",
+    );
+  }
+  await db.meal.delete({ where: { id: mealId } });
 }
 
 export type CloseMealResult = {

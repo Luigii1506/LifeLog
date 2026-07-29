@@ -61,10 +61,26 @@ no compensa para un solo usuario.
 
 ## Tests
 
-Los que tocan base necesitan un Postgres aparte:
+Los que tocan base necesitan **otra base**, no otro schema.
 
+Se intentó aislar con `?schema=test_xxx` en la misma cadena. **No funciona:** el
+adaptador serverless de Neon ignora ese parámetro. Los tests corrieron contra
+`public` y borraron 29 alimentos y 63 ejercicios de producción, mientras los
+schemas `test_*` se creaban vacíos dando falsa impresión de aislamiento.
+
+Ahora `global-setup.ts` compara host y nombre de base, y **se niega a arrancar**
+si coinciden.
+
+Opciones:
+
+    # Rama de Neon (gratis, sin Docker)
+    # Neon → Branches → New branch → copia su cadena
+    export TEST_DATABASE_URL="postgresql://…/neondb?sslmode=require"
+
+    # O Postgres local
     docker run -d -p 5433:5432 -e POSTGRES_PASSWORD=test postgres:16
     export TEST_DATABASE_URL="postgres://postgres:test@localhost:5433/postgres"
+
     npm test
 
-Sin `TEST_DATABASE_URL` se saltan con aviso y corren solo los 62 de lógica pura.
+Sin `TEST_DATABASE_URL` se saltan con aviso y corren los 62 de lógica pura.
