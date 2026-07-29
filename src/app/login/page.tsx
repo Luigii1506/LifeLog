@@ -34,11 +34,16 @@ export default async function LoginPage({
           </button>
         </form>
 
-        {error && (
+        {error === "config" ? (
+          <p role="status" className="rounded-lg bg-accent px-4 py-3 text-center text-sm text-white">
+            El servidor no tiene frase de acceso configurada. Define
+            AUTH_PASSPHRASE en las variables de entorno y vuelve a desplegar.
+          </p>
+        ) : error ? (
           <p role="status" className="text-center text-sm text-accent">
             Frase incorrecta
           </p>
-        )}
+        ) : null}
       </div>
     </main>
   );

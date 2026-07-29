@@ -11,9 +11,24 @@
 const COOKIE = "lifelog_sesion";
 const DURACION_DIAS = 90;
 
+/**
+ * Una frase vacía no es una frase.
+ *
+ * Pasó en el primer despliegue: la variable existía en Vercel pero sin valor,
+ * y `passphraseCorrecta` devolvía false siempre. El login cargaba, aceptaba lo
+ * que escribieras y lo rechazaba — sin decir por qué. Una app cuya única
+ * protección está en blanco tiene que negarse a funcionar, no fallar callada.
+ */
+const MINIMO = 8;
+
 function claveSecreta(): string {
-  const secreto = process.env.AUTH_SECRET ?? process.env.AUTH_PASSPHRASE;
-  if (!secreto) throw new Error("Falta AUTH_PASSPHRASE en las variables de entorno");
+  const secreto = (process.env.AUTH_SECRET || process.env.AUTH_PASSPHRASE || "").trim();
+  if (secreto.length < MINIMO) {
+    throw new Error(
+      `AUTH_PASSPHRASE está vacía o es demasiado corta (mínimo ${MINIMO} caracteres). ` +
+        "Ponla en las variables de entorno del proyecto y vuelve a desplegar.",
+    );
+  }
   return secreto;
 }
 
@@ -81,8 +96,9 @@ export async function cookieValida(valor: string | undefined): Promise<boolean> 
 }
 
 export function passphraseCorrecta(intento: string): boolean {
-  const esperada = process.env.AUTH_PASSPHRASE;
-  if (!esperada) return false;
+  // claveSecreta lanza si está vacía o es corta: es preferible un error
+  // visible a un login que rechaza todo sin explicar nada.
+  const esperada = claveSecreta();
   return igualSeguro(intento.trim(), esperada);
 }
 
