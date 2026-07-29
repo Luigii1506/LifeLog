@@ -11,12 +11,22 @@ queda cerrada para todos los demás — que es el punto (ADR-113).
 
 ## Qué pasa en cada despliegue
 
-    prisma generate      genera el cliente
-    prisma migrate deploy aplica las migraciones pendientes
-    next build           construye
+    prisma generate   genera el cliente (no necesita base)
+    next build        construye
 
-Las tablas se crean solas en el primer despliegue. No hay que entrar a Neon a
-ejecutar nada.
+**Las migraciones NO van en el build, a propósito.** `prisma migrate deploy`
+necesita conectarse, y la integración de Neon no siempre expone la cadena en
+la fase de construcción — cuando no lo hace, tumba el despliegue entero con un
+error que no dice nada útil. Además una caída momentánea de la base rompería
+un despliegue que por lo demás está bien.
+
+## Migraciones, cuando cambie el esquema
+
+Desde tu máquina, con el `.env` puesto:
+
+    npm run db:deploy
+
+Aplícalas ANTES de desplegar: el código nuevo espera las tablas nuevas.
 
 ## Siembra inicial, una sola vez
 

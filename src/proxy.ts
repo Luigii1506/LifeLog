@@ -4,11 +4,13 @@ import { cookieValida, NOMBRE_COOKIE } from "@/lib/auth/session";
 /**
  * Puerta de entrada (ADR-113).
  *
+ * Se llama `proxy` y no `middleware`: Next 16 renombró el convenio.
+ *
  * Bloquea todo salvo el propio login y los recursos estáticos. Una URL pública
  * que registra peso, gastos, medicación y ubicación no puede estar abierta ni
  * un día — y un despliegue de Vercel es público desde el segundo uno.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
