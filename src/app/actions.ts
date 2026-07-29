@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { emit, EventValidationError } from "@/lib/events/emit";
 import { isEventKind, type EventKind } from "@/lib/events/kinds";
+import { timeOfDayToDate } from "@/lib/time-of-day";
 
 /** Nombres de campo en español para los mensajes de error. */
 const ETIQUETAS: Record<string, string> = {
@@ -91,5 +92,11 @@ export async function logQuickFlow(
   const spec = await buildQuickFlow(flowId as never);
   if (!spec) return { ok: false, error: `Flujo desconocido: ${flowId}` };
 
-  return logEvent(spec.kind, spec.build(answers), { source: "app:guiado" });
+  return logEvent(spec.kind, spec.build(answers), {
+    source: "app:guiado",
+    startedAt: spec.startedAtFrom
+      ? timeOfDayToDate(String(answers[spec.startedAtFrom] ?? ""))?.toISOString()
+      : undefined,
+  });
 }
+

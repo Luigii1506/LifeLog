@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TimePicker } from "./time-picker";
 
 /**
  * GuidedFlow — captura guiada, una pregunta por pantalla.
@@ -52,6 +53,15 @@ export type FlowStep =
       skipLabel?: string;
     }
   | {
+      type: "time";
+      id: string;
+      question: string;
+      hint?: string;
+      /** "HH:MM" inicial. Por defecto, ahora redondeado. */
+      defaultValue?: string;
+      confirmLabel?: string;
+    }
+  | {
       type: "text";
       id: string;
       question: string;
@@ -65,6 +75,7 @@ export type FlowAnswer =
   | { stepId: string; kind: "choice"; value: string; label: string }
   | { stepId: string; kind: "custom"; value: string }
   | { stepId: string; kind: "quantity"; value: number }
+  | { stepId: string; kind: "time"; value: string }
   | { stepId: string; kind: "skip" };
 
 export function GuidedFlow({
@@ -106,6 +117,8 @@ export function GuidedFlow({
             <ChoiceStep step={step} busy={busy} onAnswer={onAnswer} />
           ) : step.type === "quantity" ? (
             <QuantityStep step={step} busy={busy} onAnswer={onAnswer} />
+          ) : step.type === "time" ? (
+            <TimeStep step={step} busy={busy} onAnswer={onAnswer} />
           ) : (
             <TextStep step={step} busy={busy} onAnswer={onAnswer} />
           )}
@@ -409,5 +422,39 @@ function TextStep({
         </button>
       )}
     </form>
+  );
+}
+
+function TimeStep({
+  step,
+  busy,
+  onAnswer,
+}: {
+  step: Extract<FlowStep, { type: "time" }>;
+  busy?: boolean;
+  onAnswer: (a: FlowAnswer) => void;
+}) {
+  const [hora, setHora] = useState(() => {
+    const [h, m] = (step.defaultValue ?? "").split(":");
+    const ahora = new Date();
+    return {
+      hour: Number.isFinite(Number(h)) && h !== "" ? Number(h) : ahora.getHours(),
+      minute: Number.isFinite(Number(m)) && m !== "" ? Number(m) : ahora.getMinutes(),
+    };
+  });
+
+  const texto = `${String(hora.hour).padStart(2, "0")}:${String(hora.minute).padStart(2, "0")}`;
+
+  return (
+    <div className="space-y-6">
+      <TimePicker value={hora} onChange={setHora} />
+      <button
+        disabled={busy}
+        onClick={() => onAnswer({ stepId: step.id, kind: "time", value: texto })}
+        className="w-full rounded-xl bg-accent py-5 text-lg font-medium text-white transition active:scale-[0.98] disabled:opacity-50"
+      >
+        {step.confirmLabel ?? "Confirmar"} {texto}
+      </button>
+    </div>
   );
 }

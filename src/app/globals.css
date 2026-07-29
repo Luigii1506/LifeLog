@@ -44,3 +44,12 @@ input,
 select {
   font: inherit;
 }
+
+/* Las ruedas del selector de hora: sin barra, el imán es la guía. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

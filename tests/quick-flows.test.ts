@@ -21,7 +21,7 @@ afterAll(async () => {
 });
 
 const COMPLETAS: Record<string, Record<string, string | number>> = {
-  wake: { energy: "8" },
+  wake: { at: "07:32" },
   sleep: { hours: 7.5, quality: "8" },
   weight: { kg: 78.4 },
   medication: { name: "Metilfenidato" },
@@ -34,7 +34,7 @@ const COMPLETAS: Record<string, Record<string, string | number>> = {
 
 /** Lo mínimo que queda si se saltan todos los pasos opcionales. */
 const MINIMAS: Record<string, Record<string, string | number>> = {
-  wake: {},
+  wake: { at: "07:32" },
   sleep: { hours: 8 },
   weight: { kg: 78 },
   medication: { name: "X" },
@@ -90,6 +90,20 @@ describe("flujos guiados de dominios ligeros", () => {
       expect(paso.suggested).toBe(78);
       expect(paso.presets).toContain(78);
     }
+  });
+
+  it("«Desperté» registra la hora real, no el payload", async () => {
+    const spec = await flows.buildQuickFlow("wake");
+    // El dato no va en el payload: va en startedAt.
+    expect(spec!.build({ at: "07:32" })).toEqual({});
+    expect(spec!.startedAtFrom).toBe("at");
+    expect(spec!.steps).toHaveLength(1);
+    expect(spec!.steps[0].type).toBe("time");
+  });
+
+  it("«Desperté» no pregunta nada más: solo la hora", async () => {
+    const spec = await flows.buildQuickFlow("wake");
+    expect(spec!.steps.map((p) => p.id)).toEqual(["at"]);
   });
 
   it("un flujo desconocido devuelve null en vez de romper", async () => {

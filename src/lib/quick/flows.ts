@@ -35,6 +35,13 @@ export type QuickFlowSpec = {
   steps: FlowStep[];
   /** Convierte las respuestas en el payload del evento. */
   build: (answers: Record<string, string | number>) => Record<string, unknown>;
+  /**
+   * Id del paso cuyo valor "HH:MM" fija `startedAt`.
+   *
+   * Sin esto, «Desperté» guardaría la hora en que abriste la app, no la hora
+   * a la que despertaste — que es justo el dato que importa.
+   */
+  startedAtFrom?: string;
 };
 
 /** Escala de ánimo con caras. Cinco opciones, no diez: elegir entre 7 y 8 es ruido. */
@@ -111,16 +118,14 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
     case "wake":
       return {
         id, kind: "wake.up", label: "Desperté", icon: "🌅", done: "Buenos días",
+        startedAtFrom: "at",
         steps: [
           {
-            type: "choice", id: "energy", question: "¿Cómo despertaste?",
-            columns: 5, coerce: "number", skipLabel: "Solo registrar la hora",
-            options: CARAS.map(([icon, label, valor]) => ({
-              value: String(valor), label, icon,
-            })),
+            type: "time", id: "at", question: "¿A qué hora despertaste?",
+            hint: "Desliza para ajustar", confirmLabel: "Desperté a las",
           },
         ],
-        build: (a) => (a.energy !== undefined ? { energy: Number(a.energy) } : {}),
+        build: () => ({}),
       };
 
     case "sleep":

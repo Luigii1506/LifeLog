@@ -51,6 +51,7 @@ export function QuickFlowRunner({
     if (respuesta.kind === "choice") siguientes[paso.id] = respuesta.value;
     else if (respuesta.kind === "custom") siguientes[paso.id] = respuesta.value;
     else if (respuesta.kind === "quantity") siguientes[paso.id] = respuesta.value;
+    else if (respuesta.kind === "time") siguientes[paso.id] = respuesta.value;
     // "skip" no escribe nada: el campo queda ausente, que es distinto de vacío.
 
     setRespuestas(siguientes);
