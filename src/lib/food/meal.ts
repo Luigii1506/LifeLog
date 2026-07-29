@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { newId } from "@/lib/ids";
-import { currentTimezone, emit } from "@/lib/events/emit";
+import { emit } from "@/lib/events/emit";
 import { scaleMacros, sumMacros, type Macros } from "./macros";
 
 /**
@@ -31,6 +31,8 @@ export async function startMeal(input: {
   placeEntityId?: string | null;
   hungerBefore?: number | null;
   startedAt?: Date;
+  /** Zona del USUARIO, enviada desde el navegador. En servidor es UTC. */
+  timeZone?: string;
   source?: string;
 }) {
   const abierta = await db.meal.findFirst({
@@ -51,7 +53,7 @@ export async function startMeal(input: {
       id: newId(startedAt.getTime()),
       mealType: input.mealType,
       startedAt,
-      timezone: currentTimezone(),
+      timezone: input.timeZone ?? "UTC",
       recipeId: input.recipeId ?? null,
       placeEntityId: input.placeEntityId ?? null,
       hungerBefore: input.hungerBefore ?? null,
@@ -160,7 +162,11 @@ export async function removeItem(itemId: string) {
 }
 
 /** Copia una comida anterior como una nueva, abierta y editable. */
-export async function duplicateMeal(sourceMealId: string, mealType?: string) {
+export async function duplicateMeal(
+  sourceMealId: string,
+  mealType?: string,
+  timeZone?: string,
+) {
   const origen = await db.meal.findUnique({
     where: { id: sourceMealId },
     include: { items: { orderBy: { id: "asc" } } },
@@ -170,6 +176,7 @@ export async function duplicateMeal(sourceMealId: string, mealType?: string) {
   const nueva = await startMeal({
     mealType: mealType ?? origen.mealType,
     recipeId: null, // los items ya vienen copiados; no se re-expande la receta
+    timeZone: timeZone ?? origen.timezone,
   });
 
   for (const item of origen.items) {

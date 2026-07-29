@@ -260,3 +260,59 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("repetir la comida de ayer", () => {
     expect((await queries.getMeal(copia.id))!.items).toHaveLength(2);
   });
 });
+
+// ── Registro incremental ────────────────────────────────────────────────
+
+/**
+ * El flujo guiado de comida acumulaba todo en memoria del cliente y escribía
+ * al cerrar. Cerrar la pestaña a media comida lo perdía entero, y el flujo
+ * arrancaba su propia comida cerrando de paso la que `repeatLastMeal` acababa
+ * de abrir. Ahora escribe alimento a alimento, como las series del gimnasio.
+ */
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("registro incremental", () => {
+  it("lo registrado sobrevive sin cerrar la comida", async () => {
+    const m = await food.startMeal({ mealType: "desayuno" });
+    await food.addItem({ mealId: m.id, foodId: huevoId, amount: 2 });
+
+    // Una recarga la encuentra abierta y con lo que llevaba dentro.
+    const abierta = await queries.getOpenMeal();
+    expect(abierta!.id).toBe(m.id);
+    expect(abierta!.items).toHaveLength(1);
+    expect(abierta!.items[0].amount).toBe(2);
+  });
+
+  it("guarda la zona del usuario, no la del servidor", async () => {
+    const m = await food.startMeal({ mealType: "cena", timeZone: "America/Tijuana" });
+    expect(m.timezone).toBe("America/Tijuana");
+
+    await food.addItem({ mealId: m.id, foodId: polloId, amount: 200 });
+    const cerrada = await food.closeMeal(m.id);
+
+    const evento = await db.event.findUnique({ where: { id: cerrada.eventId } });
+    expect(evento!.timezone).toBe("America/Tijuana");
+  });
+
+  it("salir sin registrar nada no deja la comida colgando ni emite evento", async () => {
+    // La tabla de eventos no se limpia entre pruebas —es append-only, I-02—
+    // así que lo que importa es que este descarte no añada ninguno.
+    const antes = await db.event.count({ where: { kind: "meal.logged" } });
+
+    const m = await food.startMeal({ mealType: "snack" });
+    await food.discardMeal(m.id);
+
+    expect(await queries.getOpenMeal()).toBeNull();
+    expect(await db.event.count({ where: { kind: "meal.logged" } })).toBe(antes);
+  });
+
+  it("deshacer el último alimento no toca los anteriores", async () => {
+    const m = await food.startMeal({ mealType: "desayuno" });
+    await food.addItem({ mealId: m.id, foodId: huevoId, amount: 2 });
+    const segundo = await food.addItem({ mealId: m.id, foodId: tortillaId, amount: 2 });
+
+    await food.removeItem(segundo.id);
+
+    const abierta = await queries.getOpenMeal();
+    expect(abierta!.items).toHaveLength(1);
+    expect(abierta!.items[0].foodId).toBe(huevoId);
+  });
+});

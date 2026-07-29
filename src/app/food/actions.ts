@@ -5,8 +5,8 @@ import { db } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import {
   addItem,
-  addRecipe,
   closeMeal,
+  discardMeal,
   duplicateMeal,
   MealError,
   removeItem,
@@ -25,9 +25,10 @@ function fail(error: unknown): FoodResult {
 export async function beginMeal(
   mealType: string,
   recipeId: string | null,
+  timeZone: string,
 ): Promise<FoodResult> {
   try {
-    await startMeal({ mealType, recipeId });
+    await startMeal({ mealType, recipeId, timeZone, source: "app:food:guiado" });
   } catch (error) {
     return fail(error);
   }
@@ -36,11 +37,14 @@ export async function beginMeal(
 }
 
 /** El atajo que más se usa: la mayoría de los desayunos son el mismo. */
-export async function repeatLastMeal(mealType: string): Promise<FoodResult> {
+export async function repeatLastMeal(
+  mealType: string,
+  timeZone: string,
+): Promise<FoodResult> {
   try {
     const ultima = await lastMealOfType(mealType);
     if (!ultima) return { ok: false, error: `No hay ningún ${mealType} anterior` };
-    await duplicateMeal(ultima.id, mealType);
+    await duplicateMeal(ultima.id, mealType, timeZone);
   } catch (error) {
     return fail(error);
   }
@@ -70,20 +74,6 @@ export async function addMealItem(input: {
   return { ok: true };
 }
 
-export async function addMealRecipe(
-  mealId: string,
-  recipeId: string,
-  servings: number,
-): Promise<FoodResult> {
-  try {
-    await addRecipe({ mealId, recipeId, servings });
-  } catch (error) {
-    return fail(error);
-  }
-  revalidatePath("/food");
-  return { ok: true };
-}
-
 export async function removeMealItem(itemId: string): Promise<FoodResult> {
   try {
     await removeItem(itemId);
@@ -94,15 +84,17 @@ export async function removeMealItem(itemId: string): Promise<FoodResult> {
   return { ok: true };
 }
 
-export async function finishMeal(mealId: string): Promise<FoodResult> {
+export async function finishMeal(
+  mealId: string,
+): Promise<FoodResult & { kcal?: number | null; itemCount?: number }> {
   try {
-    await closeMeal(mealId);
+    const r = await closeMeal(mealId);
+    revalidatePath("/food");
+    revalidatePath("/");
+    return { ok: true, kcal: r.kcal, itemCount: r.itemCount };
   } catch (error) {
     return fail(error);
   }
-  revalidatePath("/food");
-  revalidatePath("/");
-  return { ok: true };
 }
 
 /** Crear un alimento sin salir del flujo. La fricción mata el registro. */
@@ -139,35 +131,13 @@ export async function createFood(input: {
   }
 }
 
-/**
- * Registra una comida completa en un solo paso, desde el flujo guiado.
- *
- * El flujo guiado acumula las respuestas en el cliente y las envía juntas al
- * final: entre pregunta y pregunta no hay red, y la latencia es lo que mata
- * este patrón. La comida se abre, se llena y se cierra en una sola operación.
- */
-export async function logGuidedMeal(
-  mealType: string,
-  items: { foodId: string | null; name: string; amount: number | null; unit: string }[],
-): Promise<FoodResult & { kcal?: number | null }> {
-  if (items.length === 0) return { ok: false, error: "No hay nada que registrar" };
-
+/** Descarta una comida abierta que quedó vacía. Salir no debe dejar basura. */
+export async function cancelMeal(mealId: string): Promise<FoodResult> {
   try {
-    const meal = await startMeal({ mealType, source: "app:food:guiado" });
-    for (const item of items) {
-      await addItem({
-        mealId: meal.id,
-        foodId: item.foodId,
-        name: item.name,
-        amount: item.amount,
-        unit: item.unit,
-      });
-    }
-    const resultado = await closeMeal(meal.id);
-    revalidatePath("/food");
-    revalidatePath("/");
-    return { ok: true, kcal: resultado.kcal };
+    await discardMeal(mealId);
   } catch (error) {
     return fail(error);
   }
+  revalidatePath("/food");
+  return { ok: true };
 }

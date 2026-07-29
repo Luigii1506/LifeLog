@@ -35,7 +35,10 @@ export function QuickFlowRunner({
 
   function guardar(finales: Record<string, string | number>) {
     startTransition(async () => {
-      const r = await logQuickFlow(flowId, finales);
+      // La zona la sabe el NAVEGADOR. El servidor corre en UTC y usar la
+      // suya desplazaba cada evento siete horas.
+      const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const r = await logQuickFlow(flowId, finales, zona);
       if (!r.ok) setError(r.error);
       else setListo(true);
     });

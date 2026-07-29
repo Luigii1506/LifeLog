@@ -14,7 +14,13 @@ import { kindDefinition, type EventKind } from "./kinds";
  *   I-10  idempotencia por id (ULID)
  */
 
-/** Zona horaria del dispositivo. Sin ella, un viaje corrompe el análisis horario. */
+/**
+ * Zona horaria de QUIEN EJECUTA esta función.
+ *
+ * En el navegador es la del usuario. En una acción de servidor es la de
+ * Vercel —UTC—, que no sirve. Por eso los flujos mandan la suya explícitamente
+ * y esto queda solo como último recurso.
+ */
 export function currentTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
@@ -26,6 +32,8 @@ export type EmitInput<K extends EventKind = EventKind> = {
   startedAt?: Date;
   /** Cuándo terminó. Nulo si es instantáneo. */
   endedAt?: Date | null;
+  /** Zona del USUARIO. Si falta se cae a la de quien ejecuta, que en
+   *  servidor es UTC y casi nunca es la correcta. */
   timezone?: string;
   /** ULID de una entidad que vive fuera de esta base (ADR-114). */
   entityId?: string | null;

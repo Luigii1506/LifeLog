@@ -37,7 +37,7 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
           <div className="flex-1 pb-5">
             <div className="flex items-baseline gap-3">
               <time className="font-mono text-sm tabular-nums text-muted">
-                {formatTime(entry.startedAt)}
+                {formatTime(entry.startedAt, entry.timezone)}
               </time>
               <span className="font-medium">{entry.label}</span>
             </div>
@@ -51,11 +51,19 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
   );
 }
 
-function formatTime(date: Date) {
+/**
+ * La hora se pinta en la zona del PROPIO evento, no en la del servidor.
+ *
+ * Cada evento guarda dónde ocurrió: un desayuno en Madrid debe seguir
+ * mostrándose a las 09:00 aunque lo mires desde Tijuana. Renderizar con la
+ * zona del servidor mostraba todo en UTC.
+ */
+function formatTime(date: Date, timeZone?: string) {
   return date.toLocaleTimeString("es-MX", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone,
   });
 }
 

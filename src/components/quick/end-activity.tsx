@@ -29,7 +29,11 @@ export function EndActivity({
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          const r = await logEvent("activity.ended", { activity, minutes: minutos });
+          const r = await logEvent(
+            "activity.ended",
+            { activity, minutes: minutos },
+            { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" },
+          );
           if (!r.ok) setError(r.error);
         })
       }

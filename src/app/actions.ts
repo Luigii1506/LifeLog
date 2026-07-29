@@ -29,7 +29,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export async function logEvent(
   kind: string,
   payload: unknown,
-  options?: { entityId?: string; startedAt?: string; source?: string },
+  options?: { entityId?: string; startedAt?: string; source?: string; timeZone?: string },
 ): Promise<ActionResult> {
   if (!isEventKind(kind)) {
     return { ok: false, error: `Tipo de evento desconocido: ${kind}` };
@@ -43,6 +43,7 @@ export async function logEvent(
       startedAt: options?.startedAt
         ? new Date(options.startedAt)
         : undefined,
+      timezone: options?.timeZone,
       source: options?.source ?? "app:today",
     });
   } catch (error) {
@@ -87,6 +88,7 @@ export async function logOneTap(kind: string): Promise<ActionResult> {
 export async function logQuickFlow(
   flowId: string,
   answers: Record<string, string | number>,
+  timeZone: string,
 ): Promise<ActionResult> {
   const { buildQuickFlow } = await import("@/lib/quick/flows");
   const spec = await buildQuickFlow(flowId as never);
@@ -94,8 +96,12 @@ export async function logQuickFlow(
 
   return logEvent(spec.kind, spec.build(answers), {
     source: "app:guiado",
+    timeZone,
     startedAt: spec.startedAtFrom
-      ? timeOfDayToDate(String(answers[spec.startedAtFrom] ?? ""))?.toISOString()
+      ? timeOfDayToDate(
+          String(answers[spec.startedAtFrom] ?? ""),
+          timeZone,
+        )?.toISOString()
       : undefined,
   });
 }

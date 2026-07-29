@@ -23,6 +23,8 @@ export async function startSession(options: {
   routineId?: string | null;
   placeEntityId?: string | null;
   energyBefore?: number | null;
+  /** Zona del USUARIO, enviada desde el navegador. En servidor es UTC. */
+  timeZone?: string;
   source?: string;
 } = {}) {
   const abierta = await db.workoutSession.findFirst({ where: { status: "open" } });
@@ -38,7 +40,7 @@ export async function startSession(options: {
       id: newId(startedAt.getTime()),
       routineId: options.routineId ?? null,
       startedAt,
-      timezone: currentTimezone(),
+      timezone: options.timeZone ?? "UTC",
       placeEntityId: options.placeEntityId ?? null,
       energyBefore: options.energyBefore ?? null,
       status: "open",
