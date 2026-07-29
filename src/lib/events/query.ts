@@ -72,3 +72,38 @@ function safeParse(json: string): Record<string, unknown> {
     return {};
   }
 }
+
+export type OpenActivity = { id: string; activity: string; startedAt: Date };
+
+/**
+ * Actividades iniciadas y no terminadas.
+ *
+ * `activity.started` sin su `activity.ended` deja la actividad colgando. Sin
+ * esta consulta no hay forma de cerrarla desde la interfaz, y en un mes
+ * tendrías treinta gimnasios abiertos.
+ */
+export async function openActivities(date: Date): Promise<OpenActivity[]> {
+  const { start, end } = dayBounds(date);
+
+  const eventos = await db.event.findMany({
+    where: {
+      kind: { in: ["activity.started", "activity.ended"] },
+      startedAt: { gte: start, lt: end },
+    },
+    orderBy: { startedAt: "asc" },
+  });
+
+  const abiertas = new Map<string, OpenActivity>();
+  for (const evento of eventos) {
+    const payload = safeParse(evento.payloadJson);
+    const nombre = typeof payload.activity === "string" ? payload.activity : null;
+    if (!nombre) continue;
+
+    if (evento.kind === "activity.started") {
+      abiertas.set(nombre, { id: evento.id, activity: nombre, startedAt: evento.startedAt });
+    } else {
+      abiertas.delete(nombre);
+    }
+  }
+  return [...abiertas.values()];
+}

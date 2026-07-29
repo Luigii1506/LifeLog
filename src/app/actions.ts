@@ -4,6 +4,19 @@ import { revalidatePath } from "next/cache";
 import { emit, EventValidationError } from "@/lib/events/emit";
 import { isEventKind, type EventKind } from "@/lib/events/kinds";
 
+/** Nombres de campo en español para los mensajes de error. */
+const ETIQUETAS: Record<string, string> = {
+  hours: "horas de sueño",
+  quality: "calidad",
+  kg: "kilogramos",
+  amount: "monto",
+  minutes: "minutos",
+  score: "puntuación",
+  activity: "actividad",
+  text: "texto",
+  name: "nombre",
+};
+
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 /**
@@ -33,7 +46,18 @@ export async function logEvent(
     });
   } catch (error) {
     if (error instanceof EventValidationError) {
-      return { ok: false, error: `Datos inválidos para ${kind}` };
+      // Decir QUÉ campo falla, no solo que algo falla. Un error genérico
+      // hace que el usuario reintente a ciegas — o que se rinda.
+      const issues = error.issues as { path: (string | number)[]; message: string }[];
+      const campos = issues
+        .map((i) => ETIQUETAS[String(i.path[0])] ?? String(i.path[0]))
+        .filter(Boolean);
+      return {
+        ok: false,
+        error: campos.length
+          ? `Falta o es inválido: ${[...new Set(campos)].join(", ")}`
+          : "Datos inválidos",
+      };
     }
     console.error("logEvent falló", error);
     return { ok: false, error: "No se pudo registrar" };

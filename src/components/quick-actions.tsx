@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { logEvent } from "@/app/actions";
+import { parseFormNumber } from "@/lib/parse-number";
 
 type Sheet =
   | null
@@ -32,35 +33,72 @@ const SHEETS: { id: Exclude<Sheet, null>; label: string }[] = [
   { id: "note", label: "Nota" },
 ];
 
-export function QuickActions() {
+export function QuickActions({
+  openActivities = [],
+}: {
+  openActivities?: { activity: string; startedAt: string }[];
+}) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [pending, startTransition] = useTransition();
-  const [flash, setFlash] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ text: string; ok: boolean } | null>(null);
+  // Guarda contra doble registro: tras un toque, ese botón queda bloqueado
+  // un momento. Sin esto, un botón que parece no responder se toca 5 veces.
+  const [reciente, setReciente] = useState<string | null>(null);
 
   function send(kind: string, payload: unknown, confirmation: string) {
+    if (reciente === kind) return;
+    setReciente(kind);
+    setTimeout(() => setReciente(null), 2500);
+
     startTransition(async () => {
       const result = await logEvent(kind, payload);
       if (result.ok) {
-        setFlash(confirmation);
+        setFlash({ text: `${confirmation} registrado`, ok: true });
         setSheet(null);
-        setTimeout(() => setFlash(null), 2000);
+        setTimeout(() => setFlash(null), 2500);
       } else {
-        setFlash(result.error);
+        setFlash({ text: result.error, ok: false });
+        setReciente(null); // si falló, hay que poder reintentar ya
       }
     });
   }
 
   return (
     <section className="space-y-3">
+      {openActivities.map((abierta) => {
+        const minutos = Math.round(
+          (Date.now() - new Date(abierta.startedAt).getTime()) / 60000,
+        );
+        return (
+          <button
+            key={abierta.activity}
+            disabled={pending}
+            onClick={() =>
+              send(
+                "activity.ended",
+                { activity: abierta.activity, minutes: minutos },
+                abierta.activity,
+              )
+            }
+            className="flex w-full items-center justify-between rounded-xl border border-accent bg-surface px-4 py-4 transition active:scale-[0.99] disabled:opacity-50"
+          >
+            <span className="font-medium">Terminar {abierta.activity}</span>
+            <span className="font-mono text-sm tabular-nums text-muted">
+              {minutos} min
+            </span>
+          </button>
+        );
+      })}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {ONE_TAP.map((action) => (
           <button
             key={action.kind}
-            disabled={pending}
+            disabled={pending || reciente === action.kind}
             onClick={() => send(action.kind, action.payload, action.label)}
-            className="rounded-xl bg-accent px-4 py-4 text-base font-medium text-white transition active:scale-[0.97] disabled:opacity-50"
+            className="rounded-xl bg-accent px-4 py-4 text-base font-medium text-white transition active:scale-[0.97] disabled:opacity-40"
           >
-            {action.label}
+            {reciente === action.kind ? "✓" : action.label}
           </button>
         ))}
         {SHEETS.map((item) => (
@@ -80,8 +118,16 @@ export function QuickActions() {
       </div>
 
       {flash && (
-        <p className="text-sm text-muted" role="status">
-          {flash}
+        <p
+          role="status"
+          aria-live="polite"
+          className={`rounded-lg px-4 py-3 text-center font-medium ${
+            flash.ok
+              ? "bg-accent/15 text-accent"
+              : "bg-accent text-white"
+          }`}
+        >
+          {flash.text}
         </p>
       )}
 
@@ -107,10 +153,7 @@ function SheetForm({ sheet, pending, onSend }: SheetFormProps) {
       onSubmit={(e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
-        const num = (k: string) => {
-          const v = data.get(k);
-          return v === null || v === "" ? undefined : Number(v);
-        };
+        const num = (k: string) => parseFormNumber(data.get(k));
         const str = (k: string) => {
           const v = data.get(k);
           return v === null || v === "" ? undefined : String(v);

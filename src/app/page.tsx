@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { QuickActions } from "@/components/quick-actions";
 import { Timeline } from "@/components/timeline";
-import { timelineForDay } from "@/lib/events/query";
+import { openActivities, timelineForDay } from "@/lib/events/query";
 
 export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
   const now = new Date();
-  const entries = await timelineForDay(now);
+  const [entries, abiertas] = await Promise.all([
+    timelineForDay(now),
+    openActivities(now),
+  ]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-8 sm:py-12">
@@ -34,7 +37,12 @@ export default async function TodayPage() {
         ))}
       </div>
 
-      <QuickActions />
+      <QuickActions
+        openActivities={abiertas.map((a) => ({
+          activity: a.activity,
+          startedAt: a.startedAt.toISOString(),
+        }))}
+      />
 
       <section className="mt-10">
         <h2 className="mb-5 text-xs font-medium tracking-[0.12em] text-muted uppercase">
