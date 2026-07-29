@@ -17,6 +17,11 @@ const ALTO_ITEM = 56;
 const VISIBLES = 5;
 const RELLENO = ((VISIBLES - 1) / 2) * ALTO_ITEM;
 
+// Constantes de módulo: si se crearan en cada render, su identidad cambiaría
+// y el efecto de sincronización se dispararía sin motivo en cada pintada.
+const HORAS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTOS = Array.from({ length: 60 }, (_, i) => i);
+
 export function TimePicker({
   value,
   onChange,
@@ -35,7 +40,7 @@ export function TimePicker({
 
       <div className="relative flex items-center justify-center gap-1">
         <Rueda
-          values={Array.from({ length: 24 }, (_, i) => i)}
+          values={HORAS}
           value={value.hour}
           onChange={(hour) => onChange({ ...value, hour })}
           label="hora"
@@ -44,7 +49,7 @@ export function TimePicker({
           :
         </span>
         <Rueda
-          values={Array.from({ length: 60 }, (_, i) => i)}
+          values={MINUTOS}
           value={value.minute}
           onChange={(minute) => onChange({ ...value, minute })}
           label="minuto"
@@ -67,15 +72,29 @@ function Rueda({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [activo, setActivo] = useState(value);
-  const inicializado = useRef(false);
+  const montado = useRef(false);
+  /** Último valor que ESTA rueda emitió, para distinguir quién causó el cambio. */
+  const emitido = useRef(value);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Posición inicial sin animación: aparecer ya en el valor correcto.
   useEffect(() => {
     const nodo = ref.current;
-    if (!nodo || inicializado.current) return;
-    inicializado.current = true;
-    nodo.scrollTop = values.indexOf(value) * ALTO_ITEM;
+    if (!nodo) return;
+
+    if (!montado.current) {
+      montado.current = true;
+      emitido.current = value;
+      nodo.scrollTop = values.indexOf(value) * ALTO_ITEM;
+      return;
+    }
+
+    // El valor cambió desde FUERA —el dictado, por ejemplo— así que hay que
+    // mover la rueda. Si el cambio vino del propio scroll del usuario, la
+    // rueda ya está en su sitio y moverla otra vez daría un tirón.
+    if (value === emitido.current) return;
+    emitido.current = value;
+    setActivo(value);
+    nodo.scrollTo({ top: values.indexOf(value) * ALTO_ITEM, behavior: "smooth" });
   }, [value, values]);
 
   function alHacerScroll() {
@@ -90,7 +109,9 @@ function Rueda({
     // así no se emiten cincuenta cambios por gesto.
     if (temporizador.current) clearTimeout(temporizador.current);
     temporizador.current = setTimeout(() => {
-      if (siguiente !== value) onChange(siguiente);
+      if (siguiente === value) return;
+      emitido.current = siguiente;
+      onChange(siguiente);
     }, 90);
   }
 
