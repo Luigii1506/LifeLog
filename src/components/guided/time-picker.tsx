@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+/**
+ * useLayoutEffect corre ANTES de pintar, así que la rueda aparece ya en su
+ * sitio en vez de mostrar 00 durante un fotograma. En el servidor no existe
+ * layout, así que ahí se cae a useEffect para no avisar por consola.
+ */
+const useEfectoDeLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /**
  * Selector de hora tipo rueda, 24 horas.
@@ -77,14 +84,17 @@ function Rueda({
   const emitido = useRef(value);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  useEfectoDeLayout(() => {
     const nodo = ref.current;
     if (!nodo) return;
 
     if (!montado.current) {
       montado.current = true;
       emitido.current = value;
-      nodo.scrollTop = values.indexOf(value) * ALTO_ITEM;
+      // INSTANTÁNEO, no suave: la rueda de minutos son 3.300 px hasta el 59, y
+      // con scroll suave eso es un segundo largo girando desde 00. Se ve como
+      // si no hubiera puesto la hora actual — que es justo lo que hace.
+      nodo.scrollTo({ top: values.indexOf(value) * ALTO_ITEM, behavior: "instant" });
       return;
     }
 
