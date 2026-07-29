@@ -27,7 +27,6 @@ export default async function RegistrarPage({
 
       <QuickFlowRunner
         flowId={spec.id}
-        label={spec.label}
         icon={spec.icon}
         done={spec.done}
         steps={spec.steps}

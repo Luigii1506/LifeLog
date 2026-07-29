@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TimePicker } from "./time-picker";
+import { VoiceTime } from "./voice-time";
 
 /**
  * GuidedFlow — captura guiada, una pregunta por pantalla.
@@ -446,8 +447,9 @@ function TimeStep({
   const texto = `${String(hora.hour).padStart(2, "0")}:${String(hora.minute).padStart(2, "0")}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <TimePicker value={hora} onChange={setHora} />
+      <VoiceTime onTime={setHora} />
       <button
         disabled={busy}
         onClick={() => onAnswer({ stepId: step.id, kind: "time", value: texto })}

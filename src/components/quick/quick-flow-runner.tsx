@@ -18,13 +18,11 @@ import {
  */
 export function QuickFlowRunner({
   flowId,
-  label,
   icon,
   done,
   steps,
 }: {
   flowId: string;
-  label: string;
   icon: string;
   done: string;
   steps: FlowStep[];
@@ -99,7 +97,6 @@ export function QuickFlowRunner({
           {error}
         </p>
       )}
-      <p className="mt-6 text-center text-xs text-muted">{label}</p>
     </div>
   );
 }
