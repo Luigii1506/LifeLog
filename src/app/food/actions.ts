@@ -138,3 +138,36 @@ export async function createFood(input: {
     return fail(error);
   }
 }
+
+/**
+ * Registra una comida completa en un solo paso, desde el flujo guiado.
+ *
+ * El flujo guiado acumula las respuestas en el cliente y las envía juntas al
+ * final: entre pregunta y pregunta no hay red, y la latencia es lo que mata
+ * este patrón. La comida se abre, se llena y se cierra en una sola operación.
+ */
+export async function logGuidedMeal(
+  mealType: string,
+  items: { foodId: string | null; name: string; amount: number | null; unit: string }[],
+): Promise<FoodResult & { kcal?: number | null }> {
+  if (items.length === 0) return { ok: false, error: "No hay nada que registrar" };
+
+  try {
+    const meal = await startMeal({ mealType, source: "app:food:guiado" });
+    for (const item of items) {
+      await addItem({
+        mealId: meal.id,
+        foodId: item.foodId,
+        name: item.name,
+        amount: item.amount,
+        unit: item.unit,
+      });
+    }
+    const resultado = await closeMeal(meal.id);
+    revalidatePath("/food");
+    revalidatePath("/");
+    return { ok: true, kcal: resultado.kcal };
+  } catch (error) {
+    return fail(error);
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { beginMeal, repeatLastMeal } from "@/app/food/actions";
 
 type Recipe = { id: string; name: string; mealType: string | null; itemCount: number };
@@ -59,6 +60,13 @@ export function StartMeal({
         </button>
       )}
 
+      <Link
+        href={`/food/guiado/${tipo}`}
+        className="block w-full rounded-xl bg-accent px-4 py-5 text-center text-lg font-medium text-white transition active:scale-[0.98]"
+      >
+        Registrar paso a paso
+      </Link>
+
       {recetasDelTipo.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-xs font-medium tracking-[0.12em] text-muted uppercase">
@@ -83,9 +91,9 @@ export function StartMeal({
       <button
         disabled={pending}
         onClick={() => run(() => beginMeal(tipo, null))}
-        className="w-full rounded-xl border border-line bg-surface px-4 py-4 transition active:scale-[0.99] disabled:opacity-50"
+        className="w-full py-3 text-sm text-muted disabled:opacity-50"
       >
-        Empezar de cero
+        Modo manual
       </button>
 
       {error && (
