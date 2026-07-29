@@ -16,17 +16,18 @@ export default async function GymPage({
   const sesion = await getOpenSession();
 
   if (!sesion) {
-    const rutinas = await getRoutines();
+    const [rutinas, grupos] = await Promise.all([getRoutines(), musclegroupSummary()]);
     return (
       <Shell>
         <StartWorkout
+          groups={grupos}
           routines={rutinas.map((r) => ({
             id: r.id,
             name: r.name,
             objective: r.objective,
             exercises: r.exercises.map((e) => e.exercise.name),
+            firstGroup: r.exercises[0]?.exercise.muscleGroup ?? null,
           }))}
-          exerciseCount={await db.exercise.count({ where: { status: "active" } })}
         />
       </Shell>
     );

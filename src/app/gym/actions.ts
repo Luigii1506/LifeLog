@@ -102,3 +102,24 @@ export async function createExercise(
     return fail(error);
   }
 }
+
+/**
+ * Abre la sesión de entrenamiento.
+ *
+ * No hay un paso previo de «empezar entrenamiento»: llegas al gimnasio, el
+ * coach dice pecho, tocas pecho. Elegir qué vas a trabajar ES empezar, y
+ * separarlo en dos pantallas era un toque de más por pura ceremonia.
+ *
+ * Si ya hay una sesión abierta no crea otra: entrar dos veces desde el home
+ * no debe duplicar el entrenamiento.
+ */
+export async function openWorkout(routineId?: string | null): Promise<GymResult> {
+  try {
+    const abierta = await db.workoutSession.findFirst({ where: { status: "open" } });
+    if (!abierta) await startSession({ routineId: routineId ?? null });
+  } catch (error) {
+    return fail(error);
+  }
+  revalidatePath("/gym");
+  return { ok: true };
+}

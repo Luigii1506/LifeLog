@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { TimePicker } from "./time-picker";
 import { VoiceTime } from "./voice-time";
+import { VoiceButton } from "./voice-button";
+import { matchOption } from "@/lib/match-option";
+import { leerNumero, normalizarPalabras } from "@/lib/spanish-numbers";
 
 /**
  * GuidedFlow — captura guiada, una pregunta por pantalla.
@@ -220,6 +223,23 @@ function ChoiceStep({
 
   return (
     <div className="space-y-2">
+      {/* La voz vive en el MOTOR, no en cada pantalla: así toda lista de
+          opciones la hereda sin que nadie se acuerde de añadirla. */}
+      <VoiceButton
+        idleLabel="Dilo"
+        onTranscript={(texto) => {
+          const elegida = matchOption(texto, step.options);
+          if (!elegida) return false;
+          onAnswer({
+            stepId: step.id,
+            kind: "choice",
+            value: elegida.value,
+            label: elegida.label,
+          });
+          return true;
+        }}
+      />
+
       <div
         className={`grid gap-2 ${
           step.columns === 1
@@ -337,6 +357,16 @@ function QuantityStep({
 
   return (
     <div className="space-y-2">
+      <VoiceButton
+        idleLabel="Dilo"
+        onTranscript={(texto) => {
+          const leido = leerNumero(normalizarPalabras(texto));
+          if (!leido) return false;
+          onAnswer({ stepId: step.id, kind: "quantity", value: leido.valor });
+          return true;
+        }}
+      />
+
       <div className="grid grid-cols-4 gap-2">
         {step.presets.map((valor) => (
           <button
@@ -405,6 +435,14 @@ function TextStep({
         rows={step.multiline ? 4 : undefined}
         className="w-full resize-none rounded-xl border border-line bg-background px-4 py-4 text-lg outline-none focus:border-accent"
       />
+      <VoiceButton
+        idleLabel="Dilo"
+        onTranscript={(texto) => {
+          setValor(texto);
+          return true;
+        }}
+      />
+
       <button
         type="submit"
         disabled={busy || !valor.trim()}

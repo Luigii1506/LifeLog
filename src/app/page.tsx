@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Timeline } from "@/components/timeline";
 import { EndActivity } from "@/components/quick/end-activity";
+import { VoiceLauncher } from "@/components/quick/voice-launcher";
 import { openActivities, timelineForDay } from "@/lib/events/query";
 import { QUICK_FLOWS } from "@/lib/quick/flows";
 
@@ -44,6 +45,19 @@ export default async function TodayPage() {
       <h2 className="mb-3 text-xl font-semibold tracking-tight">
         ¿Qué quieres registrar?
       </h2>
+
+      <div className="mb-3">
+        <VoiceLauncher
+          destinations={[
+            { value: "/gym", label: "gimnasio pesas entrenar entrenamiento" },
+            { value: "/food", label: "comida comer desayuno cena almuerzo" },
+            ...QUICK_FLOWS.map((f) => ({
+              value: `/registrar/${f.id}`,
+              label: f.label,
+            })),
+          ]}
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         <Tarjeta href="/gym" icon="🏋️" label="Gimnasio" destacada />

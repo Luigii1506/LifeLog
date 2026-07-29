@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addSet, createExercise, finishWorkout, removeSet } from "@/app/gym/actions";
 import { VoiceButton } from "@/components/guided/voice-button";
 import { parseSpokenSet } from "@/lib/gym/parse-spoken-set";
+import { matchOption } from "@/lib/match-option";
 
 export type ExerciseCard = {
   id: string;
@@ -122,9 +123,23 @@ export function GuidedWorkout({
   // ── Paso 1: elegir grupo muscular ─────────────────────────────────
   return (
     <Marco totals={totals} error={error} pending={pending}>
-      <h2 className="mb-4 text-xl font-semibold tracking-tight">
+      <h2 className="mb-3 text-xl font-semibold tracking-tight">
         ¿Qué vas a trabajar?
       </h2>
+      <div className="mb-3">
+        <VoiceButton
+          idleLabel="Dilo · «espalda»"
+          onTranscript={(texto) => {
+            const elegido = matchOption(
+              texto,
+              groups.map((g) => ({ value: g.group, label: g.group })),
+            );
+            if (!elegido) return false;
+            router.push(`/gym?grupo=${encodeURIComponent(elegido.value)}`);
+            return true;
+          }}
+        />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         {groups.map((g) => (
           <button
@@ -227,11 +242,18 @@ function ExercisePicker({
         lang="es-MX"
         idleLabel="Di el ejercicio"
         onTranscript={(texto) => {
-          const encontrado = exercises.find((e) =>
-            normaliza(e.name).includes(normaliza(texto)),
+          const encontrado = matchOption(
+            texto,
+            exercises.map((e) => ({ value: e.id, label: e.name })),
           );
-          if (encontrado) onPick(encontrado.id);
-          else setFiltro(texto);
+          if (encontrado) {
+            onPick(encontrado.value);
+            return true;
+          }
+          // Sin coincidencia clara, lo dicho pasa al buscador: se ve lo que
+          // entendió y se elige a mano en vez de registrar otro ejercicio.
+          setFiltro(texto);
+          return false;
         }}
       />
 
