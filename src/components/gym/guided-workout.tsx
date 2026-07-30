@@ -11,6 +11,7 @@ import {
 } from "@/app/gym/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
 import { ExerciseTile } from "./exercise-card";
+import { SessionBar } from "./session-bar";
 import { ExercisePhotoButton } from "./exercise-photo";
 import { parseSpokenSet } from "@/lib/gym/parse-spoken-set";
 import { matchOption } from "@/lib/match-option";
@@ -57,6 +58,9 @@ export function GuidedWorkout({
   currentExercise,
   sets,
   totals,
+  startedAt,
+  initialMinutes,
+  workedExercises,
 }: {
   sessionId: string;
   groups: GroupCard[];
@@ -66,6 +70,12 @@ export function GuidedWorkout({
   currentExercise: ExerciseCard | null;
   sets: SetRow[];
   totals: { setCount: number; volumeKg: number };
+  /** ISO. La barra sigue contando en el cliente. */
+  startedAt: string;
+  /** Minutos ya transcurridos, calculados en el servidor. Evita el parpadeo. */
+  initialMinutes: number;
+  /** Ejercicios trabajados, para el resumen antes de cerrar. */
+  workedExercises: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -82,21 +92,29 @@ export function GuidedWorkout({
 
   if (prs) return <Resumen prs={prs} totals={totals} />;
 
+  // Cerrar la sesión es lo mismo desde cualquier pantalla, así que vive aquí y
+  // no repetido en cada rama.
+  const terminar = () =>
+    startTransition(async () => {
+      const r = await finishWorkout(sessionId, null);
+      if (r.ok) setPrs(r.prs ?? []);
+      else setError(r.error);
+    });
+
+  const marco = {
+    totals,
+    startedAt,
+    initialMinutes,
+    workedExercises,
+    error,
+    pending,
+    onFinish: terminar,
+  };
+
   // ── Paso 3: registrando series de un ejercicio ────────────────────
   if (currentExercise) {
     return (
-      <Marco
-        totals={totals}
-        error={error}
-        onFinish={() =>
-          startTransition(async () => {
-            const r = await finishWorkout(sessionId, null);
-            if (r.ok) setPrs(r.prs ?? []);
-            else setError(r.error);
-          })
-        }
-        pending={pending}
-      >
+      <Marco {...marco}>
         <SetLogger
           sessionId={sessionId}
           exercise={currentExercise}
@@ -114,7 +132,7 @@ export function GuidedWorkout({
   // ── Paso 2: elegir ejercicio dentro del grupo ─────────────────────
   if (initialGroup) {
     return (
-      <Marco totals={totals} error={error} pending={pending}>
+      <Marco {...marco}>
         <ExercisePicker
           group={initialGroup}
           exercises={exercises}
@@ -138,7 +156,7 @@ export function GuidedWorkout({
 
   // ── Paso 1: elegir grupo muscular ─────────────────────────────────
   return (
-    <Marco totals={totals} error={error} pending={pending}>
+    <Marco {...marco}>
       <h2 className="mb-3 text-2xl font-semibold tracking-tight">
         ¿Qué vas a trabajar?
       </h2>
@@ -184,30 +202,34 @@ export function GuidedWorkout({
   );
 }
 
+/**
+ * Envoltorio de todas las pantallas con sesión abierta.
+ *
+ * La cabecera con el recuento desapareció: la barra flotante ya dice tiempo,
+ * series y volumen, y tenerlo dos veces en la misma pantalla era ruido. La
+ * barra además está en TODAS las pantallas, no solo donde cabía el botón.
+ */
 function Marco({
   children,
   totals,
+  startedAt,
+  initialMinutes,
+  workedExercises,
   error,
   onFinish,
   pending,
 }: {
   children: React.ReactNode;
   totals: { setCount: number; volumeKg: number };
+  startedAt: string;
+  initialMinutes: number;
+  workedExercises: string[];
   error: string | null;
-  onFinish?: () => void;
+  onFinish: () => void;
   pending: boolean;
 }) {
   return (
     <div className="space-y-4">
-      <header className="flex items-baseline justify-between rounded-xl border border-line bg-surface px-4 py-3">
-        <span className="text-sm text-muted">
-          {totals.setCount} {totals.setCount === 1 ? "serie" : "series"}
-        </span>
-        <span className="font-mono text-sm tabular-nums text-muted">
-          {Math.round(totals.volumeKg).toLocaleString("es-MX")} kg
-        </span>
-      </header>
-
       {children}
 
       {error && (
@@ -216,15 +238,15 @@ function Marco({
         </p>
       )}
 
-      {onFinish && (
-        <button
-          onClick={onFinish}
-          disabled={pending}
-          className="w-full rounded-xl border border-line py-4 text-muted transition active:scale-[0.98] disabled:opacity-50"
-        >
-          Terminar entrenamiento
-        </button>
-      )}
+      <SessionBar
+        startedAt={startedAt}
+        initialMinutes={initialMinutes}
+        setCount={totals.setCount}
+        volumeKg={totals.volumeKg}
+        exercises={workedExercises}
+        pending={pending}
+        onFinish={onFinish}
+      />
     </div>
   );
 }

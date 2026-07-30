@@ -62,3 +62,20 @@ select {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* La hoja de confirmación entra desde abajo. Aparecer de golpe en el centro
+   de la pantalla se lee como un error del navegador, no como una decisión. */
+@keyframes subir {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[subir_200ms_ease-out\] {
+    animation: none;
+  }
+}

@@ -76,6 +76,22 @@ export default async function GymPage({
         }))
     : [];
 
+  // Los ejercicios trabajados, en orden y sin repetir, para el resumen previo
+  // a cerrar. La pregunta al terminar no es «¿seguro?» sino «¿me falta algo?».
+  const nombres = new Map(
+    (
+      await db.exercise.findMany({
+        where: { id: { in: [...new Set(sesion.sets.map((s) => s.exerciseId))] } },
+        select: { id: true, name: true },
+      })
+    ).map((e) => [e.id, e.name]),
+  );
+  const trabajados: string[] = [];
+  for (const s of sesion.sets) {
+    const nombre = nombres.get(s.exerciseId);
+    if (nombre && !trabajados.includes(nombre)) trabajados.push(nombre);
+  }
+
   const trabajo = sesion.sets.filter((s) => s.setType !== "warmup");
   const totals = {
     setCount: trabajo.length,
@@ -111,6 +127,12 @@ export default async function GymPage({
         currentExercise={tarjetaEnCurso}
         sets={seriesDeEsteEjercicio}
         totals={totals}
+        startedAt={sesion.startedAt.toISOString()}
+        initialMinutes={Math.max(
+          0,
+          Math.floor((Date.now() - sesion.startedAt.getTime()) / 60000),
+        )}
+        workedExercises={trabajados}
       />
     </Shell>
   );
