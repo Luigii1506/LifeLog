@@ -10,6 +10,7 @@ import {
   removeSet,
 } from "@/app/gym/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
+import { ExerciseTile } from "./exercise-card";
 import { ExercisePhotoButton } from "./exercise-photo";
 import { parseSpokenSet } from "@/lib/gym/parse-spoken-set";
 import { matchOption } from "@/lib/match-option";
@@ -24,7 +25,12 @@ export type ExerciseCard = {
   lastSets: string | null;
 };
 
-export type GroupCard = { group: string; exerciseCount: number; timesTrained: number };
+export type GroupCard = {
+  group: string;
+  exerciseCount: number;
+  timesTrained: number;
+  photoCount: number;
+};
 
 type SetRow = {
   id: string;
@@ -133,22 +139,44 @@ export function GuidedWorkout({
   // ── Paso 1: elegir grupo muscular ─────────────────────────────────
   return (
     <Marco totals={totals} error={error} pending={pending}>
-      <h2 className="mb-3 text-xl font-semibold tracking-tight">
+      <h2 className="mb-3 text-2xl font-semibold tracking-tight">
         ¿Qué vas a trabajar?
       </h2>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2.5">
         {groups.map((g) => (
           <button
             key={g.group}
             disabled={pending}
             onClick={() => router.push(`/gym?grupo=${encodeURIComponent(g.group)}`)}
-            className="rounded-xl border border-line bg-surface p-5 text-left transition active:scale-[0.97] disabled:opacity-50"
+            className="relative overflow-hidden rounded-2xl border border-line bg-surface p-4 text-left transition active:scale-[0.97] disabled:opacity-50"
           >
             <span className="block text-lg font-medium capitalize">{g.group}</span>
             <span className="mt-0.5 block text-xs text-muted">
               {g.exerciseCount} ejercicios
               {g.timesTrained > 0 && ` · ${g.timesTrained} series`}
             </span>
+
+            {/* Avance del catálogo de fotos. Es lo que estás construyendo
+                ahora mismo, y sin esto habría que entrar en cada grupo para
+                saber cuál te falta. Desaparece al completarlo. */}
+            {g.photoCount < g.exerciseCount && (
+              <span className="mt-2 flex items-center gap-1.5">
+                <span
+                  className="h-1 flex-1 overflow-hidden rounded-full bg-line"
+                  aria-hidden
+                >
+                  <span
+                    className="block h-full rounded-full bg-accent transition-all"
+                    style={{
+                      width: `${Math.round((g.photoCount / g.exerciseCount) * 100)}%`,
+                    }}
+                  />
+                </span>
+                <span className="text-[10px] tabular-nums text-muted">
+                  {g.photoCount}/{g.exerciseCount} 📷
+                </span>
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -245,71 +273,45 @@ function ExercisePicker({
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-semibold tracking-tight capitalize">{group}</h2>
-        <button onClick={onBack} className="text-sm text-muted">
+        <h2 className="text-2xl font-semibold tracking-tight capitalize">{group}</h2>
+        <button
+          onClick={onBack}
+          className="rounded-full border border-line px-3 py-1 text-xs text-muted transition active:scale-95"
+        >
           Cambiar grupo
         </button>
       </div>
 
+      {/* El buscador solo aparece cuando hay bastantes: con seis tarjetas a la
+          vista, un campo de texto es una fila desperdiciada y una invitación a
+          teclear que no hace falta. */}
+      {exercises.length > 8 && (
+        <input
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          placeholder="Buscar"
+          className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm outline-none transition focus:border-accent"
+        />
+      )}
 
-      <input
-        value={filtro}
-        onChange={(e) => setFiltro(e.target.value)}
-        placeholder="Buscar"
-        className="w-full rounded-xl border border-line bg-background px-4 py-3 outline-none focus:border-accent"
-      />
-
-      {/* Rejilla de dos, no lista: con foto, la vista reconoce la máquina
-          antes de que leas el nombre, y en dos columnas caben seis de golpe.
-          Sin foto la tarjeta sigue funcionando — el catálogo empieza vacío y
-          se llena a fotos según vas al gimnasio. */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Rejilla de dos: con foto, la vista reconoce la máquina antes de que
+          leas el nombre, y en dos columnas caben seis de golpe. */}
+      <div className="grid grid-cols-2 gap-2.5">
         {visibles.map((ejercicio) => (
-          <div key={ejercicio.id} className="relative">
-            <button
-              disabled={pending}
-              onClick={() => onPick(ejercicio.id)}
-              className="flex w-full flex-col overflow-hidden rounded-xl border border-line bg-surface text-left transition active:scale-[0.98] disabled:opacity-50"
-            >
-              <div className="relative aspect-[4/3] w-full bg-background">
-                {ejercicio.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={ejercicio.photoUrl}
-                    alt={ejercicio.name}
-                    loading="lazy"
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <div className="flex size-full items-center justify-center text-3xl opacity-25">
-                    🏋️
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-1 flex-col gap-0.5 p-3">
-                <span className="text-sm leading-tight font-medium">{ejercicio.name}</span>
-                {ejercicio.equipment && (
-                  <span className="text-[11px] text-muted">{ejercicio.equipment}</span>
-                )}
-                {ejercicio.lastSets && (
-                  <span className="mt-0.5 font-mono text-[11px] text-muted">
-                    {ejercicio.lastSets}
-                  </span>
-                )}
-              </div>
-            </button>
-
-            <div className="absolute top-2 right-2">
-              <ExercisePhotoButton
-                exerciseId={ejercicio.id}
-                hasPhoto={Boolean(ejercicio.photoUrl)}
-                compact
-              />
-            </div>
-          </div>
+          <ExerciseTile
+            key={ejercicio.id}
+            exercise={ejercicio}
+            disabled={pending}
+            onPick={() => onPick(ejercicio.id)}
+          />
         ))}
       </div>
+
+      {visibles.length === 0 && !filtro.trim() && (
+        <p className="py-10 text-center text-sm text-muted">
+          No hay ejercicios de {group} todavía.
+        </p>
+      )}
 
       {filtro.trim() && !exacto && (
         <button
@@ -467,25 +469,25 @@ function SetLogger({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         {exercise.photoUrl && (
           // Confirma de un vistazo que estás en la máquina que creías. Pequeña
           // a propósito: aquí ya elegiste, y el sitio lo necesitan los campos.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={exercise.photoUrl}
-            alt={exercise.name}
-            className="size-16 shrink-0 rounded-xl border border-line object-cover"
+            alt=""
+            className="size-14 shrink-0 rounded-xl border border-line object-cover"
           />
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-semibold tracking-tight">{exercise.name}</h2>
+          <h2 className="text-xl leading-tight font-semibold tracking-tight">
+            {exercise.name}
+          </h2>
           {exercise.lastSets ? (
-            <p className="mt-1 font-mono text-sm text-muted">
-              Anterior: {exercise.lastSets}
-            </p>
+            <p className="mt-0.5 font-mono text-sm text-muted">{exercise.lastSets}</p>
           ) : (
-            <p className="mt-1 text-sm text-muted">Primera vez</p>
+            <p className="mt-0.5 text-sm text-muted">Primera vez</p>
           )}
         </div>
       </div>

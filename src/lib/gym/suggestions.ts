@@ -28,6 +28,8 @@ export type GroupSummary = {
   exerciseCount: number;
   /** Veces que has entrenado este grupo. Ordena las tarjetas. */
   timesTrained: number;
+  /** Máquinas de este grupo que ya tienen foto. */
+  photoCount: number;
 };
 
 /** Grupos con cuántos ejercicios tienen y cuánto los entrenas. */
@@ -56,11 +58,25 @@ export async function musclegroupSummary(): Promise<GroupSummary[]> {
     if (muscleGroup) cuenta.set(muscleGroup, (cuenta.get(muscleGroup) ?? 0) + 1);
   }
 
+  // Cuántas máquinas de cada grupo ya tienen foto. Es el avance de un catálogo
+  // que se construye yendo al gimnasio: sin esto no hay forma de saber qué
+  // grupo te falta por fotografiar sin entrar en cada uno.
+  const conFoto = await db.assetLink.findMany({
+    where: { exerciseId: { not: null }, predicate: "photo_of", asset: { status: "active" } },
+    select: { exerciseId: true },
+  });
+  const fotos = new Map<string, number>();
+  for (const { exerciseId } of conFoto) {
+    const grupo = exerciseId ? grupoDe.get(exerciseId) : null;
+    if (grupo) fotos.set(grupo, (fotos.get(grupo) ?? 0) + 1);
+  }
+
   return [...new Set([...GRUPOS, ...cuenta.keys()])]
     .map((group) => ({
       group,
       exerciseCount: cuenta.get(group) ?? 0,
       timesTrained: usos.get(group) ?? 0,
+      photoCount: fotos.get(group) ?? 0,
     }))
     .filter((g) => g.exerciseCount > 0)
     .sort((a, b) => b.timesTrained - a.timesTrained || a.group.localeCompare(b.group));
