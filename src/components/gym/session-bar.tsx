@@ -1,22 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePublishStatus } from "@/components/shell/status-slot";
 
 /**
- * Barra de sesión en curso.
+ * Sesión en curso: estado arriba, confirmación abajo.
  *
  * Existe porque terminar el entrenamiento solo se podía desde dentro de un
- * ejercicio: si estabas eligiendo grupo, no había salida y tocaba entrar en un
- * ejercicio cualquiera para poder cerrar. Ahora la barra vive en todas las
- * pantallas del gimnasio mientras haya sesión abierta.
+ * ejercicio: si estabas eligiendo grupo no había salida y tocaba entrar en uno
+ * cualquiera solo para cerrar.
  *
- * Va abajo, pegada a la barra de navegación, y deja hueco a la derecha para el
- * botón de voz — que queda encima, como acoplado. Ese hueco no es decorativo:
- * sin él, el texto de la barra pasa por debajo del micrófono y no se lee.
+ * La primera versión fue una barra flotante abajo, y estaba mal: competía con
+ * el botón de voz y con la navegación, tres capas fijas peleando por la zona
+ * del pulgar. Una sesión en curso es ESTADO, no acción — y el estado va arriba,
+ * donde uno mira para enterarse. Abajo se actúa.
  *
- * Muestra el tiempo en vivo. Es el dato que uno mira entre series y el único
- * que no se puede reconstruir después: las series quedan registradas, pero
- * «cuánto llevo» solo existe mientras entrenas.
+ * Este componente ya no pinta nada en su sitio: publica la píldora en la barra
+ * superior y se queda con la hoja de confirmación, que sí sube desde abajo
+ * porque eso sí es una acción.
+ *
+ * Muestra el tiempo en vivo: es el único dato que no se puede reconstruir
+ * después. Las series quedan registradas, pero «cuánto llevo» solo existe
+ * mientras entrenas.
  */
 
 export function SessionBar({
@@ -43,57 +48,37 @@ export function SessionBar({
   const minutos = useMinutosDesde(startedAt, initialMinutes);
   const olvidada = minutos >= MINUTOS_SOSPECHOSOS;
 
+  // `useCallback` y un texto memorizado: el estado se publica en un efecto, y
+  // sin identidades estables se republicaría en cada render.
+  const abrir = useCallback(() => setAbierta(true), []);
+  const etiqueta = useMemo(
+    () => (
+      <>
+        <span className="font-mono tabular-nums">{formatoDuracion(minutos)}</span>
+        <span className="ml-2 text-muted">
+          {olvidada
+            ? "¿se quedó abierta?"
+            : `${setCount} ${setCount === 1 ? "serie" : "series"}`}
+        </span>
+      </>
+    ),
+    [minutos, olvidada, setCount],
+  );
+
+  usePublishStatus(etiqueta, abrir, olvidada);
+
+  if (!abierta) return null;
+
   return (
-    <>
-      <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 4.75rem)" }}
-      >
-        <button
-          onClick={() => setAbierta(true)}
-          disabled={pending}
-          aria-label="Ver el entrenamiento y terminarlo"
-          className="pointer-events-auto flex w-full items-center gap-3 rounded-full border border-line bg-surface/95 py-2.5 pr-20 pl-4 shadow-lg backdrop-blur transition active:scale-[0.98] disabled:opacity-50"
-        >
-          {/* El punto latiendo dice «esto sigue corriendo» sin gastar palabras.
-              Es lo que distingue una sesión abierta de un resumen. */}
-          <span className="relative flex size-2 shrink-0" aria-hidden>
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-accent" />
-          </span>
-
-          <span
-            className={`font-mono text-sm tabular-nums ${
-              olvidada ? "text-accent" : ""
-            }`}
-          >
-            {formatoDuracion(minutos)}
-          </span>
-
-          <span className="truncate text-sm text-muted">
-            {olvidada
-              ? "¿se quedó abierta?"
-              : `${setCount} ${setCount === 1 ? "serie" : "series"}${
-                  volumeKg > 0
-                    ? ` · ${Math.round(volumeKg).toLocaleString("es-MX")} kg`
-                    : ""
-                }`}
-          </span>
-        </button>
-      </div>
-
-      {abierta && (
-        <HojaConfirmacion
-          minutos={minutos}
-          setCount={setCount}
-          volumeKg={volumeKg}
-          exercises={exercises}
-          pending={pending}
-          onCancel={() => setAbierta(false)}
-          onFinish={onFinish}
-        />
-      )}
-    </>
+    <HojaConfirmacion
+      minutos={minutos}
+      setCount={setCount}
+      volumeKg={volumeKg}
+      exercises={exercises}
+      pending={pending}
+      onCancel={() => setAbierta(false)}
+      onFinish={onFinish}
+    />
   );
 }
 
