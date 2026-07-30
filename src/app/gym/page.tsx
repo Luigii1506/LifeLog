@@ -2,6 +2,7 @@ import { GuidedWorkout } from "@/components/gym/guided-workout";
 import { StartWorkout } from "@/components/gym/start-workout";
 import { getOpenSession, getRoutines } from "@/lib/gym/queries";
 import { exercisesInGroup, musclegroupSummary, stickyGroup } from "@/lib/gym/suggestions";
+import { exercisePhotos } from "@/lib/assets/asset";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,14 @@ export default async function GymPage({
       : Promise.resolve([]),
   ]);
 
+  // Las fotos se resuelven en UNA consulta para todos los ejercicios visibles,
+  // no una por tarjeta. Con el arranque en frío de Neon, diez viajes de ida y
+  // vuelta se notan más que la propia descarga de las imágenes.
+  const fotos = await exercisePhotos([
+    ...ejerciciosDelGrupo.map((e) => e.id),
+    ...(enCurso ? [enCurso.id] : []),
+  ]);
+
   const seriesDeEsteEjercicio = enCurso
     ? sesion.sets
         .filter((s) => s.exerciseId === enCurso.id)
@@ -79,6 +88,7 @@ export default async function GymPage({
         name: enCurso.name,
         equipment: enCurso.equipment,
         timesLogged: 0,
+        photoUrl: fotos[enCurso.id] ?? null,
         lastSets:
           ejerciciosDelGrupo.find((e) => e.id === enCurso.id)?.lastSets ?? null,
       }
@@ -96,6 +106,7 @@ export default async function GymPage({
           equipment: e.equipment,
           timesLogged: e.timesLogged,
           lastSets: e.lastSets,
+          photoUrl: fotos[e.id] ?? null,
         }))}
         currentExercise={tarjetaEnCurso}
         sets={seriesDeEsteEjercicio}

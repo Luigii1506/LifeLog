@@ -153,6 +153,9 @@ model AssetLink {
 
   eventId       String?
   exerciseSetId String?
+  /// Foto de la MÁQUINA, no de una serie concreta: pertenece al ejercicio y
+  /// sirve para reconocerlo de un vistazo al elegirlo.
+  exerciseId    String?
   mealId        String?
   /// Referencia opaca a algo fuera de esta base.
   entityId      String?
@@ -163,11 +166,13 @@ model AssetLink {
   asset       Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
   event       Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   exerciseSet ExerciseSet? @relation(fields: [exerciseSetId], references: [id], onDelete: Cascade)
+  exercise    Exercise?    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   meal        Meal?        @relation(fields: [mealId], references: [id], onDelete: Cascade)
 
   @@index([assetId])
   @@index([eventId])
   @@index([entityId])
+  @@index([exerciseId])
   @@map("asset_links")
 }
 
@@ -220,6 +225,7 @@ model Exercise {
 
   routineItems RoutineExercise[]
   sets         ExerciseSet[]
+  assetLinks   AssetLink[]
 
   @@map("exercises")
 }

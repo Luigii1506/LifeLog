@@ -10,12 +10,15 @@ import {
   removeSet,
 } from "@/app/gym/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
+import { ExercisePhotoButton } from "./exercise-photo";
 import { parseSpokenSet } from "@/lib/gym/parse-spoken-set";
 import { matchOption } from "@/lib/match-option";
 
 export type ExerciseCard = {
   id: string;
   name: string;
+  /** Foto de la máquina, si la hay. Se reconoce antes de leer el nombre. */
+  photoUrl?: string | null;
   equipment: string | null;
   timesLogged: number;
   lastSets: string | null;
@@ -256,26 +259,55 @@ function ExercisePicker({
         className="w-full rounded-xl border border-line bg-background px-4 py-3 outline-none focus:border-accent"
       />
 
-      <div className="space-y-2">
+      {/* Rejilla de dos, no lista: con foto, la vista reconoce la máquina
+          antes de que leas el nombre, y en dos columnas caben seis de golpe.
+          Sin foto la tarjeta sigue funcionando — el catálogo empieza vacío y
+          se llena a fotos según vas al gimnasio. */}
+      <div className="grid grid-cols-2 gap-2">
         {visibles.map((ejercicio) => (
-          <button
-            key={ejercicio.id}
-            disabled={pending}
-            onClick={() => onPick(ejercicio.id)}
-            className="w-full rounded-xl border border-line bg-surface p-4 text-left transition active:scale-[0.98] disabled:opacity-50"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-medium">{ejercicio.name}</span>
-              {ejercicio.equipment && (
-                <span className="shrink-0 text-xs text-muted">{ejercicio.equipment}</span>
-              )}
-            </div>
-            {ejercicio.lastSets && (
-              <div className="mt-1 font-mono text-sm text-muted">
-                Anterior: {ejercicio.lastSets}
+          <div key={ejercicio.id} className="relative">
+            <button
+              disabled={pending}
+              onClick={() => onPick(ejercicio.id)}
+              className="flex w-full flex-col overflow-hidden rounded-xl border border-line bg-surface text-left transition active:scale-[0.98] disabled:opacity-50"
+            >
+              <div className="relative aspect-[4/3] w-full bg-background">
+                {ejercicio.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={ejercicio.photoUrl}
+                    alt={ejercicio.name}
+                    loading="lazy"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-3xl opacity-25">
+                    🏋️
+                  </div>
+                )}
               </div>
-            )}
-          </button>
+
+              <div className="flex flex-1 flex-col gap-0.5 p-3">
+                <span className="text-sm leading-tight font-medium">{ejercicio.name}</span>
+                {ejercicio.equipment && (
+                  <span className="text-[11px] text-muted">{ejercicio.equipment}</span>
+                )}
+                {ejercicio.lastSets && (
+                  <span className="mt-0.5 font-mono text-[11px] text-muted">
+                    {ejercicio.lastSets}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            <div className="absolute top-2 right-2">
+              <ExercisePhotoButton
+                exerciseId={ejercicio.id}
+                hasPhoto={Boolean(ejercicio.photoUrl)}
+                compact
+              />
+            </div>
+          </div>
         ))}
       </div>
 
@@ -435,16 +467,34 @@ function SetLogger({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{exercise.name}</h2>
-        {exercise.lastSets ? (
-          <p className="mt-1 font-mono text-sm text-muted">
-            Anterior: {exercise.lastSets}
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-muted">Primera vez</p>
+      <div className="flex items-start gap-3">
+        {exercise.photoUrl && (
+          // Confirma de un vistazo que estás en la máquina que creías. Pequeña
+          // a propósito: aquí ya elegiste, y el sitio lo necesitan los campos.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={exercise.photoUrl}
+            alt={exercise.name}
+            className="size-16 shrink-0 rounded-xl border border-line object-cover"
+          />
         )}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-semibold tracking-tight">{exercise.name}</h2>
+          {exercise.lastSets ? (
+            <p className="mt-1 font-mono text-sm text-muted">
+              Anterior: {exercise.lastSets}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted">Primera vez</p>
+          )}
+        </div>
       </div>
+
+      {!exercise.photoUrl && (
+        // Solo cuando falta: una vez tomada, el botón sería ruido permanente
+        // en la pantalla donde más prisa tienes.
+        <ExercisePhotoButton exerciseId={exercise.id} hasPhoto={false} />
+      )}
 
       {sets.length > 0 && (
         <ol className="space-y-1 rounded-xl border border-line bg-surface p-2">
