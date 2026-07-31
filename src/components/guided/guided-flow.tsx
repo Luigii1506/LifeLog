@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TimePicker } from "./time-picker";
+import { ScalePicker } from "./scale-picker";
 import { parseSpokenTime } from "@/lib/parse-spoken-time";
 import { duracionHasta, formatoHoras } from "@/lib/sleep-duration";
 import { useVoiceTarget } from "@/components/voice/registry";
@@ -82,6 +83,20 @@ export type FlowStep =
       untilLabel?: string;
     }
   | {
+      /**
+       * Un número con decimal, elegido con ruedas. Para lo que se lee en un
+       * aparato —la báscula— donde teclear es más lento que ajustar.
+       */
+      type: "scale";
+      id: string;
+      question: string;
+      hint?: string;
+      /** Valor inicial. Lo último registrado, si lo hay. */
+      defaultValue?: number;
+      unit?: string;
+      confirmLabel?: string;
+    }
+  | {
       type: "text";
       id: string;
       question: string;
@@ -139,6 +154,8 @@ export function GuidedFlow({
             <QuantityStep step={step} busy={busy} onAnswer={onAnswer} />
           ) : step.type === "time" ? (
             <TimeStep step={step} busy={busy} onAnswer={onAnswer} />
+          ) : step.type === "scale" ? (
+            <ScaleStep step={step} busy={busy} onAnswer={onAnswer} />
           ) : (
             <TextStep step={step} busy={busy} onAnswer={onAnswer} />
           )}
@@ -500,6 +517,47 @@ function TextStep({
         </button>
       )}
     </form>
+  );
+}
+
+/**
+ * Paso de escala: rueda, valor en grande y un botón que lo confirma.
+ *
+ * Misma forma que el de la hora a propósito. Son el mismo gesto —ajustar algo
+ * que ya casi está bien— y darles pantallas distintas obligaría a aprender dos.
+ */
+function ScaleStep({
+  step,
+  busy,
+  onAnswer,
+}: {
+  step: Extract<FlowStep, { type: "scale" }>;
+  busy?: boolean;
+  onAnswer: (a: FlowAnswer) => void;
+}) {
+  const [valor, setValor] = useState(step.defaultValue ?? 70);
+
+  // «setenta y ocho cuatro», «78.4». Con la báscula delante y mojado, decirlo
+  // gana a girar dos ruedas.
+  useVoiceTarget(`Di el ${step.unit ?? "número"}`, (texto) => {
+    const leido = leerNumero(normalizarPalabras(texto));
+    if (!leido) return false;
+    setValor(leido.valor);
+    return true;
+  });
+
+  return (
+    <div className="space-y-5">
+      <ScalePicker value={valor} onChange={setValor} unit={step.unit} />
+      <button
+        disabled={busy}
+        onClick={() => onAnswer({ stepId: step.id, kind: "quantity", value: valor })}
+        className="w-full rounded-xl bg-accent py-5 text-lg font-medium text-white transition active:scale-[0.98] disabled:opacity-50"
+      >
+        {step.confirmLabel ?? "Confirmar"} {valor.toLocaleString("es-MX")}{" "}
+        {step.unit ?? ""}
+      </button>
+    </div>
   );
 }
 

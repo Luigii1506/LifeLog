@@ -205,10 +205,14 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
         id, kind: "weight.logged", label: "Peso", icon: "⚖️", done: "Peso registrado",
         steps: [
           {
-            type: "quantity", id: "kg", question: "¿Cuánto pesas?",
-            hint: ultimo ? `La última vez: ${ultimo} kg` : undefined,
-            presets: alrededorDe(ultimo, 1, [60, 70, 80, 90]),
-            unit: "kg", suggested: ultimo,
+            // Rueda y no botones: el peso se mueve en décimas entre pesadas, y
+            // unos cuantos presets nunca aciertan. Arranca en el último, así
+            // que casi siempre solo hay que ajustar la décima.
+            type: "scale", id: "kg", question: "¿Cuánto pesas?",
+            hint: "Desliza para ajustar",
+            confirmLabel: "Peso",
+            defaultValue: ultimo ?? 70,
+            unit: "kg",
           },
         ],
         build: (a) => ({ kg: Number(a.kg) }),
