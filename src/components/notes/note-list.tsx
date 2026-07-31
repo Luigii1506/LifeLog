@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteNote, retagNote } from "@/app/notas/actions";
+import { deleteNote } from "@/app/notas/actions";
 import { ETIQUETAS, etiquetaPorId } from "@/lib/notes/tags";
 
 /**
@@ -25,16 +25,21 @@ export function NoteList({
   grupos,
   conteos,
   total,
+  editandoId,
+  onEditar,
+  onCerrar,
 }: {
   grupos: { dateKey: string; notas: NotaVista[] }[];
   conteos: Record<string, number>;
   total: number;
+  /** Nota que está arriba en el editor. Se marca para no perderla de vista. */
+  editandoId: string | null;
+  onEditar: (n: NotaVista) => void;
+  onCerrar: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [filtro, setFiltro] = useState<string | null>(null);
-  /** Nota abierta: sus acciones solo aparecen al tocarla. */
-  const [abierta, setAbierta] = useState<string | null>(null);
 
   const visibles = grupos
     .map((g) => ({
@@ -84,7 +89,7 @@ export function NoteList({
             <ul className="space-y-2">
               {grupo.notas.map((n) => {
                 const t = etiquetaPorId(n.tag);
-                const activa = abierta === n.id;
+                const activa = editandoId === n.id;
                 return (
                   <li
                     key={n.id}
@@ -92,8 +97,11 @@ export function NoteList({
                       activa ? "border-accent" : "border-line"
                     }`}
                   >
+                    {/* Tocar la nota la sube al editor de arriba. Editar y
+                        escribir usan la misma caja: dos formas de hacer lo
+                        mismo serían una de más. */}
                     <button
-                      onClick={() => setAbierta(activa ? null : n.id)}
+                      onClick={() => (activa ? onCerrar() : onEditar(n))}
                       className="flex w-full gap-3 p-3.5 text-left"
                     >
                       <span className="shrink-0 text-lg leading-none" aria-hidden>
@@ -116,44 +124,22 @@ export function NoteList({
                       </span>
                     </button>
 
+                    {/* Solo borrar. El texto y la etiqueta se cambian arriba,
+                        en el mismo cuadro donde se escriben. */}
                     {activa && (
-                      <div className="space-y-2 border-t border-line px-3.5 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          {ETIQUETAS.map((otra) => (
-                            <button
-                              key={otra.id}
-                              disabled={pending || otra.id === n.tag}
-                              onClick={() =>
-                                startTransition(async () => {
-                                  await retagNote(n.id, otra.id);
-                                  setAbierta(null);
-                                  router.refresh();
-                                })
-                              }
-                              className={`rounded-full border px-2.5 py-1 text-xs transition disabled:opacity-40 ${
-                                otra.id === n.tag
-                                  ? "border-accent bg-accent/10"
-                                  : "border-line"
-                              }`}
-                            >
-                              {otra.icon} {otra.label}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          disabled={pending}
-                          onClick={() =>
-                            startTransition(async () => {
-                              await deleteNote(n.id);
-                              setAbierta(null);
-                              router.refresh();
-                            })
-                          }
-                          className="w-full py-2 text-xs text-muted disabled:opacity-50"
-                        >
-                          Borrar
-                        </button>
-                      </div>
+                      <button
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await deleteNote(n.id);
+                            onCerrar();
+                            router.refresh();
+                          })
+                        }
+                        className="w-full border-t border-line py-3 text-xs text-muted transition active:scale-[0.99] disabled:opacity-50"
+                      >
+                        Borrar
+                      </button>
                     )}
                   </li>
                 );

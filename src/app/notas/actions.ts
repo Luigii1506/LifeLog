@@ -11,10 +11,17 @@ export type NoteResult = { ok: true } | { ok: false; error: string };
 /** Límite de una nota. Más largo que esto no es una captura: es un documento. */
 const MAXIMO = 2000;
 
+/**
+ * Guarda una nota, o CORRIGE la que se pase en `replacesId`.
+ *
+ * Corregir no apila otra: emite un evento que anula al anterior (I-02) y las
+ * consultas filtran los anulados, así que para quien escribe es una edición.
+ */
 export async function saveNote(
   text: string,
   tag: string,
   timeZone: string,
+  replacesId?: string | null,
 ): Promise<NoteResult> {
   const limpio = text.trim();
   if (!limpio) return { ok: false, error: "La nota está vacía" };
@@ -31,7 +38,8 @@ export async function saveNote(
       kind: "note.quick",
       payload: { text: limpio, tag: valida },
       timezone: timeZone,
-      source: "app:notas",
+      revokesId: replacesId ?? null,
+      source: replacesId ? "app:notas:correccion" : "app:notas",
     });
   } catch (error) {
     console.error("guardar nota falló", error);
@@ -39,32 +47,6 @@ export async function saveNote(
   }
   revalidatePath("/notas");
   revalidatePath("/");
-  return { ok: true };
-}
-
-/** Cambia la etiqueta sin apilar otra nota: corrige la que hay (I-02). */
-export async function retagNote(eventId: string, tag: string): Promise<NoteResult> {
-  const valida = ETIQUETAS.some((t) => t.id === tag) ? tag : ETIQUETA_POR_DEFECTO;
-  try {
-    const objetivo = await db.event.findUnique({
-      where: { id: eventId },
-      select: { kind: true, timezone: true, payloadJson: true },
-    });
-    if (!objetivo || objetivo.kind !== "note.quick") {
-      return { ok: false, error: "Esa nota no existe" };
-    }
-    const payload = JSON.parse(objetivo.payloadJson) as Record<string, unknown>;
-    await revoke(eventId, {
-      kind: "note.quick",
-      payload: { ...payload, tag: valida },
-      timezone: objetivo.timezone,
-      source: "app:notas:correccion",
-    });
-  } catch (error) {
-    console.error("reetiquetar nota falló", error);
-    return { ok: false, error: "No se pudo cambiar" };
-  }
-  revalidatePath("/notas");
   return { ok: true };
 }
 

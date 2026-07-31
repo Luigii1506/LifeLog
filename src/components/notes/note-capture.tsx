@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveNote } from "@/app/notas/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
@@ -18,8 +18,19 @@ import { ETIQUETAS, ETIQUETA_POR_DEFECTO } from "@/lib/notes/tags";
  *
  * Y viene una puesta por defecto para que nunca sea un paso obligatorio:
  * capturar no puede depender de acertar la categoría.
+ *
+ * El mismo cuadro sirve para corregir. Tocar una nota la trae aquí con su texto
+ * y su etiqueta: escribir y editar usan la misma caja, así no hay dos formas de
+ * hacer lo mismo.
  */
-export function NoteCapture() {
+export function NoteCapture({
+  editando,
+  onCancel,
+}: {
+  /** Nota que se está corrigiendo. Nulo al capturar una nueva. */
+  editando?: { id: string; text: string; tag: string } | null;
+  onCancel: () => void;
+}) {
   const router = useRouter();
   const [texto, setTexto] = useState("");
   const [tag, setTag] = useState(ETIQUETA_POR_DEFECTO);
@@ -27,6 +38,18 @@ export function NoteCapture() {
   const [error, setError] = useState<string | null>(null);
   const [guardada, setGuardada] = useState(false);
   const campo = useRef<HTMLTextAreaElement>(null);
+
+  // Al entrar en edición, el cuadro se llena con lo que había. Depende del id
+  // y no del objeto: uno literal cambia de identidad en cada render y borraría
+  // lo que estuvieras escribiendo.
+  useEffect(() => {
+    if (!editando) return;
+    setTexto(editando.text);
+    setTag(editando.tag);
+    setError(null);
+    campo.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editando?.id]);
 
   // Dictar AÑADE, no reemplaza: se habla a trozos, y sobrescribir lo dicho
   // antes convertiría cada pausa en una pérdida.
@@ -40,9 +63,11 @@ export function NoteCapture() {
     setError(null);
     startTransition(async () => {
       const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const r = await saveNote(texto, tag, zona);
+      const r = await saveNote(texto, tag, zona, editando?.id ?? null);
       if (!r.ok) return setError(r.error);
       setTexto("");
+      setTag(ETIQUETA_POR_DEFECTO);
+      onCancel();
       setGuardada(true);
       window.setTimeout(() => setGuardada(false), 1200);
       campo.current?.focus();
@@ -98,13 +123,30 @@ export function NoteCapture() {
         ))}
       </div>
 
-      <button
-        onClick={guardar}
-        disabled={pending || !texto.trim()}
-        className="w-full rounded-xl bg-accent py-4 font-medium text-white transition active:scale-[0.98] disabled:opacity-40"
-      >
-        {pending ? "Guardando…" : "Guardar"}
-      </button>
+      <div className="flex gap-2">
+        {editando && (
+          <button
+            onClick={() => {
+              setTexto("");
+              setTag(ETIQUETA_POR_DEFECTO);
+              onCancel();
+            }}
+            disabled={pending}
+            className="flex-1 rounded-xl border border-line py-4 text-sm text-muted transition active:scale-[0.98] disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+        )}
+        <button
+          onClick={guardar}
+          disabled={pending || !texto.trim()}
+          className={`rounded-xl bg-accent py-4 font-medium text-white transition active:scale-[0.98] disabled:opacity-40 ${
+            editando ? "flex-[2]" : "w-full"
+          }`}
+        >
+          {pending ? "Guardando…" : editando ? "Guardar cambios" : "Guardar"}
+        </button>
+      </div>
 
       {error && (
         <p role="status" className="text-center text-sm text-accent">
