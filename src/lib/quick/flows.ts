@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { FlowStep } from "@/components/guided/guided-flow";
 import { type EventKind } from "@/lib/events/kinds";
+import { duracionHasta } from "@/lib/sleep-duration";
 import type { QuickFlowId } from "./catalog";
 
 export type { QuickFlowId };
@@ -82,6 +83,30 @@ async function recentValues(
     .map(([valor]) => valor);
 }
 
+/**
+ * El despertar más reciente, si es de las últimas horas.
+ *
+ * Es lo que permite deducir cuánto dormiste en vez de preguntarlo. El límite
+ * de 20 horas evita usar el despertar de anteayer si un día no lo registraste:
+ * más vale preguntar la hora de despertar que calcular con un dato viejo.
+ */
+async function ultimoDespertar(): Promise<Date | null> {
+  const limite = new Date(Date.now() - 20 * 60 * 60 * 1000);
+  const evento = await db.event.findFirst({
+    where: { kind: "wake.up", startedAt: { gte: limite } },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, startedAt: true },
+  });
+  if (!evento) return null;
+
+  // I-02: un despertar anulado por una corrección no cuenta.
+  const anulado = await db.event.findFirst({
+    where: { revokesId: evento.id },
+    select: { id: true },
+  });
+  return anulado ? null : evento.startedAt;
+}
+
 async function lastNumber(kind: EventKind, field: string): Promise<number | null> {
   const evento = await db.event.findFirst({
     where: { kind },
@@ -121,28 +146,58 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
         build: () => ({}),
       };
 
-    case "sleep":
+    case "sleep": {
+      const despertar = await ultimoDespertar();
+
+      // Con la hora de despertar registrada, las horas se deducen: se pregunta
+      // a qué hora te acostaste —que se sabe— en vez de cuántas horas
+      // dormiste, que obliga a una resta de memoria y medio dormido.
+      if (despertar) {
+        const hhmm = `${String(despertar.getHours()).padStart(2, "0")}:${String(
+          despertar.getMinutes(),
+        ).padStart(2, "0")}`;
+        return {
+          id, kind: "sleep.logged", label: "Sueño", icon: "😴",
+          done: "Sueño registrado",
+          steps: [
+            {
+              type: "time", id: "bedtime", question: "¿A qué hora te dormiste?",
+              hint: "Desliza para ajustar",
+              confirmLabel: "Me dormí a las",
+              defaultValue: "23:00",
+              until: despertar.toISOString(),
+              untilLabel: `despertaste a las ${hhmm}`,
+            },
+          ],
+          build: (a) => {
+            const [h, m] = String(a.bedtime).split(":").map(Number);
+            const duracion = duracionHasta({ hour: h, minute: m }, despertar.toISOString());
+            return {
+              // Se guardan las dos horas y el cálculo. Las horas son el dato
+              // que se consulta; las horas de reloj son lo que permite
+              // recalcularlo si mañana cambia la definición.
+              bedtime: String(a.bedtime),
+              waketime: hhmm,
+              hours: duracion ? Math.round((duracion.minutos / 60) * 10) / 10 : 0,
+            };
+          },
+        };
+      }
+
+      // Sin despertar registrado no hay nada contra lo que medir. Se vuelve a
+      // preguntar las horas: peor pregunta, pero mejor que inventar el dato.
       return {
         id, kind: "sleep.logged", label: "Sueño", icon: "😴", done: "Sueño registrado",
         steps: [
           {
             type: "quantity", id: "hours", question: "¿Cuántas horas dormiste?",
-            hint: "Toca «Otra cantidad» para medias horas",
+            hint: "Registra «Desperté» primero y esto se calcula solo",
             presets: [5, 6, 7, 8], unit: "h", suggested: 7,
           },
-          {
-            type: "choice", id: "quality", question: "¿Qué tal dormiste?",
-            columns: 5, coerce: "number", skipLabel: "Saltar",
-            options: CARAS.map(([icon, label, valor]) => ({
-              value: String(valor), label, icon,
-            })),
-          },
         ],
-        build: (a) => ({
-          hours: Number(a.hours),
-          ...(a.quality !== undefined ? { quality: Number(a.quality) } : {}),
-        }),
+        build: (a) => ({ hours: Number(a.hours) }),
       };
+    }
 
     case "weight": {
       const ultimo = await lastNumber("weight.logged", "kg");

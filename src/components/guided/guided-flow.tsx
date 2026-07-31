@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TimePicker } from "./time-picker";
 import { parseSpokenTime } from "@/lib/parse-spoken-time";
+import { duracionHasta, formatoHoras } from "@/lib/sleep-duration";
 import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
 import { leerNumero, normalizarPalabras } from "@/lib/spanish-numbers";
@@ -69,6 +70,16 @@ export type FlowStep =
       /** "HH:MM" inicial. Por defecto, ahora redondeado. */
       defaultValue?: string;
       confirmLabel?: string;
+      /**
+       * Instante ISO hasta el que medir. Con él, la pantalla enseña la
+       * duración EN VIVO mientras giras la rueda.
+       *
+       * Es lo que convierte «¿cuántas horas dormiste?» —una cuenta que hace el
+       * usuario, mal y de memoria— en «¿a qué hora te dormiste?», que se sabe.
+       */
+      until?: string;
+      /** Qué es ese instante: «despertaste a las 07:30». */
+      untilLabel?: string;
     }
   | {
       type: "text";
@@ -491,6 +502,9 @@ function TimeStep({
 
   const texto = `${String(hora.hour).padStart(2, "0")}:${String(hora.minute).padStart(2, "0")}`;
 
+  // Duración hasta el instante de referencia, recalculada al girar la rueda.
+  const duracion = step.until ? duracionHasta(hora, step.until) : null;
+
   // «cinco y media», «siete y cuarto», «las ocho». Mover la rueda con el dedo
   // hasta una hora concreta cuesta varios segundos; decirla, uno.
   useVoiceTarget("Di la hora", (dicho) => {
@@ -503,6 +517,28 @@ function TimeStep({
   return (
     <div className="space-y-5">
       <TimePicker value={hora} onChange={setHora} />
+
+      {duracion !== null && (
+        <div className="rounded-2xl border border-line bg-surface px-4 py-3 text-center">
+          {duracion.plausible ? (
+            <>
+              <p className="font-mono text-2xl tabular-nums">
+                {formatoHoras(duracion.minutos)}
+              </p>
+              {step.untilLabel && (
+                <p className="mt-0.5 text-xs text-muted">{step.untilLabel}</p>
+              )}
+            </>
+          ) : (
+            // Fuera de rango no se calla ni inventa: dieciocho horas de sueño
+            // casi siempre es una rueda mal girada, y guardarlo ensucia la
+            // media para siempre.
+            <p className="text-sm text-accent">
+              Eso daría {formatoHoras(duracion.minutos)}. ¿Seguro?
+            </p>
+          )}
+        </div>
+      )}
       <button
         disabled={busy}
         onClick={() => onAnswer({ stepId: step.id, kind: "time", value: texto })}

@@ -25,7 +25,7 @@ export const QUICK_FLOWS: {
   steps: number;
 }[] = [
   { id: "wake", label: "Desperté", icon: "🌅", steps: 1 },
-  { id: "sleep", label: "Sueño", icon: "😴", steps: 2 },
+  { id: "sleep", label: "Sueño", icon: "😴", steps: 1 },
   { id: "mood", label: "Ánimo", icon: "😊", steps: 2 },
   { id: "weight", label: "Peso", icon: "⚖️", steps: 1 },
   { id: "medication", label: "Medicamento", icon: "💊", steps: 1 },
