@@ -582,7 +582,15 @@ function TimeStep({
   const texto = `${String(hora.hour).padStart(2, "0")}:${String(hora.minute).padStart(2, "0")}`;
 
   // Duración hasta el instante de referencia, recalculada al girar la rueda.
-  const duracion = step.until ? duracionHasta(hora, step.until) : null;
+  // La zona del NAVEGADOR: aquí sí es la del usuario, y así la vista previa
+  // coincide con lo que acabará guardándose.
+  const duracion = step.until
+    ? duracionHasta(
+        hora,
+        step.until,
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      )
+    : null;
 
   // «cinco y media», «siete y cuarto», «las ocho». Mover la rueda con el dedo
   // hasta una hora concreta cuesta varios segundos; decirla, uno.

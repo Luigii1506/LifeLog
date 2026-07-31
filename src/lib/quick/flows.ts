@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import type { FlowStep } from "@/components/guided/guided-flow";
 import { type EventKind } from "@/lib/events/kinds";
 import { duracionHasta } from "@/lib/sleep-duration";
+import { partsIn } from "@/lib/timezone";
+import { ZONA_POR_DEFECTO } from "@/lib/events/query";
 import type { QuickFlowId } from "./catalog";
 
 export type { QuickFlowId };
@@ -131,7 +133,17 @@ function alrededorDe(valor: number | null, paso: number, porDefecto: number[]): 
   );
 }
 
-export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | null> {
+/**
+ * Construye un flujo.
+ *
+ * `timeZone` es la del USUARIO. Importa de verdad en el sueño: la hora de
+ * acostarse y la de despertar son horas de RELOJ, y leerlas con la zona del
+ * proceso —UTC en Vercel— convertía una noche de siete horas en catorce.
+ */
+export async function buildQuickFlow(
+  id: QuickFlowId,
+  timeZone: string = ZONA_POR_DEFECTO,
+): Promise<QuickFlowSpec | null> {
   switch (id) {
     case "wake":
       return {
@@ -153,9 +165,10 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
       // a qué hora te acostaste —que se sabe— en vez de cuántas horas
       // dormiste, que obliga a una resta de memoria y medio dormido.
       if (despertar) {
-        const hhmm = `${String(despertar.getHours()).padStart(2, "0")}:${String(
-          despertar.getMinutes(),
-        ).padStart(2, "0")}`;
+        // En la zona del usuario, no en la del proceso: con `getHours()` se
+        // guardaba «15:10» por un despertar de las 08:10 en Tijuana.
+        const { hour, minute } = partsIn(despertar, timeZone);
+        const hhmm = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
         return {
           id, kind: "sleep.logged", label: "Sueño", icon: "😴",
           done: "Sueño registrado",
@@ -171,7 +184,11 @@ export async function buildQuickFlow(id: QuickFlowId): Promise<QuickFlowSpec | n
           ],
           build: (a) => {
             const [h, m] = String(a.bedtime).split(":").map(Number);
-            const duracion = duracionHasta({ hour: h, minute: m }, despertar.toISOString());
+            const duracion = duracionHasta(
+              { hour: h, minute: m },
+              despertar.toISOString(),
+              timeZone,
+            );
             return {
               // Se guardan las dos horas y el cálculo. Las horas son el dato
               // que se consulta; las horas de reloj son lo que permite

@@ -11,7 +11,14 @@
  * adivinar con reglas sobre el número, se toma **la ocurrencia más reciente de
  * esa hora de reloj que sea anterior al despertar**: eso resuelve los dos casos
  * sin distinguirlos.
+ *
+ * Y la hora de reloj se interpreta SIEMPRE en la zona del usuario, nunca en la
+ * de quien ejecuta. `setHours` usa la zona del proceso: en Vercel eso es UTC, y
+ * «me dormí a la 1» acababa significando la 1 UTC —las 18:00 del día anterior
+ * en Tijuana— así que una noche de siete horas se guardaba como catorce.
  */
+
+import { partsIn, zonedToInstant } from "./timezone";
 
 /** Menos de esto, no fue una noche de sueño. */
 const MINIMO_MINUTOS = 45;
@@ -34,11 +41,23 @@ export type Duracion = {
 export function instanteDeAcostarse(
   hora: { hour: number; minute: number },
   hasta: Date,
+  timeZone: string,
 ): Date {
-  const candidato = new Date(hasta);
-  candidato.setHours(hora.hour, hora.minute, 0, 0);
+  const { year, month, day } = partsIn(hasta, timeZone);
+
+  let candidato = zonedToInstant(year, month, day, hora.hour, hora.minute, timeZone);
   if (candidato.getTime() >= hasta.getTime()) {
-    candidato.setDate(candidato.getDate() - 1);
+    // Un día antes EN LA ZONA, no restando 24 h: en el cambio de horario un día
+    // dura 23 o 25, y restar horas fijas movería la hora de acostarse.
+    const ayer = new Date(Date.UTC(year, month - 1, day - 1));
+    candidato = zonedToInstant(
+      ayer.getUTCFullYear(),
+      ayer.getUTCMonth() + 1,
+      ayer.getUTCDate(),
+      hora.hour,
+      hora.minute,
+      timeZone,
+    );
   }
   return candidato;
 }
@@ -46,11 +65,12 @@ export function instanteDeAcostarse(
 export function duracionHasta(
   hora: { hour: number; minute: number },
   hastaISO: string,
+  timeZone: string,
 ): Duracion | null {
   const hasta = new Date(hastaISO);
   if (Number.isNaN(hasta.getTime())) return null;
 
-  const desde = instanteDeAcostarse(hora, hasta);
+  const desde = instanteDeAcostarse(hora, hasta, timeZone);
   const minutos = Math.round((hasta.getTime() - desde.getTime()) / 60000);
 
   return {

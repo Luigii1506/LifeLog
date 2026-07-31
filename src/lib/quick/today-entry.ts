@@ -159,9 +159,19 @@ function describir(
       if (!Number.isFinite(h)) return { summary: "—" };
       const horas = Math.floor(h);
       const min = Math.round((h - horas) * 60);
+      // Las DOS horas, no solo la de acostarse. El número sale de una resta, y
+      // enseñar solo un extremo lo vuelve incomprobable: con «14h» y «desde la
+      // 1:00» no había forma de ver que el otro extremo estaba mal.
+      const desde = typeof p.bedtime === "string" ? p.bedtime : null;
+      const hasta = typeof p.waketime === "string" ? p.waketime : null;
       return {
         summary: min > 0 ? `${horas}h ${min}m` : `${horas}h`,
-        detail: p.bedtime ? `desde las ${p.bedtime}` : undefined,
+        detail:
+          desde && hasta
+            ? `${desde} → ${hasta}`
+            : desde
+              ? `desde las ${desde}`
+              : undefined,
       };
     }
 

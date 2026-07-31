@@ -10,7 +10,7 @@ import { dateKeyIn, dayBoundsIn } from "@/lib/timezone";
  * en Tijuana «hoy» empezaba a las 17:00 del día anterior y la línea de tiempo
  * mezclaba dos días.
  */
-const ZONA_POR_DEFECTO = "America/Tijuana";
+export const ZONA_POR_DEFECTO = "America/Tijuana";
 
 /** Límites del día en la zona del usuario. */
 export function dayBounds(date: Date, timeZone: string = ZONA_POR_DEFECTO) {

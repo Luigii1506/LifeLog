@@ -110,7 +110,7 @@ export async function logQuickFlow(
   replacesId?: string | null,
 ): Promise<ActionResult> {
   const { buildQuickFlow } = await import("@/lib/quick/flows");
-  const spec = await buildQuickFlow(flowId as never);
+  const spec = await buildQuickFlow(flowId as never, timeZone);
   if (!spec) return { ok: false, error: `Flujo desconocido: ${flowId}` };
 
   return logEvent(spec.kind, spec.build(answers), {
