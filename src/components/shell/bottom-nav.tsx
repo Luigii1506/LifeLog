@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SECCIONES } from "@/lib/sections";
 
 /**
  * Barra inferior fija.
@@ -15,15 +16,13 @@ import { usePathname } from "next/navigation";
  * El micrófono ya no vive aquí. Compartía fila con las pestañas, así que era
  * pequeño y estaba pegado a tres enlaces que no querías tocar mientras hablas.
  * Ahora es un botón flotante propio (`VoiceFab`), más grande y sin vecinos.
+ *
+ * El orden de las pestañas es el MISMO que el del gesto de deslizar, y sale de
+ * la misma lista (`lib/sections`). La barra es lo que convierte el gesto en
+ * algo predecible: sin ella no sabrías cuántas secciones hay ni dónde estás.
  */
 export function BottomNav() {
   const pathname = usePathname();
-
-  const tabs = [
-    { href: "/", label: "Hoy", icon: "☀️" },
-    { href: "/gym", label: "Gimnasio", icon: "🏋️" },
-    { href: "/food", label: "Comida", icon: "🍽️" },
-  ];
 
   return (
     <nav
@@ -32,7 +31,7 @@ export function BottomNav() {
       aria-label="Navegación principal"
     >
       <div className="mx-auto flex w-full max-w-2xl items-stretch">
-        {tabs.map((tab) => {
+        {SECCIONES.map((tab) => {
           const activo =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (
