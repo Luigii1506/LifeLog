@@ -3,6 +3,7 @@ import { dayBounds, revokedAmong } from "@/lib/events/query";
 import type { EventKind } from "@/lib/events/kinds";
 import type { QuickFlowId } from "./catalog";
 import { EXCELENTE_ML, META_ML } from "@/lib/water/units";
+import { describir } from "./describe";
 
 /**
  * Qué se ha registrado ya hoy.
@@ -12,6 +13,15 @@ import { EXCELENTE_ML, META_ML } from "@/lib/water/units";
  * de tiempo y leerla, que es exactamente la fricción que el sistema promete
  * quitar — y que en la práctica lleva a registrar dos veces o a no registrar.
  */
+
+/**
+ * Flujos cuya tarjeta enseña el DATO en vez de la hora de guardado.
+ *
+ * «Desperté» no está: ahí la hora es el dato. En sueño o peso, en cambio, la
+ * hora de guardado no dice nada — y en el sueño llegaba a confundirse con la
+ * hora de acostarse.
+ */
+const CON_RESUMEN = new Set(["sleep", "weight", "mood"]);
 
 /** Qué evento demuestra que un flujo ya se completó hoy. */
 const EVIDENCIA: Record<QuickFlowId, EventKind[]> = {
@@ -31,6 +41,14 @@ export type FlowStatus = {
   count: number;
   /** Hora local del último registro, HH:MM. */
   lastAt: string | null;
+  /**
+   * Lo registrado, en una línea: «7h 12m», «78.4 kg», «8/10».
+   *
+   * Es lo que enseña la tarjeta cuando el dato dice más que la hora. En el
+   * sueño la hora de guardado no informa de nada —lo que importa es cuánto
+   * dormiste— y enseñarla hacía pensar que era la hora de acostarse.
+   */
+  summary: string | null;
 };
 
 export type TodayStatus = {
@@ -76,13 +94,23 @@ export async function todayStatus(
   const anulados = await revokedAmong(todos.map((e) => e.id));
   const eventos = todos.filter((e) => !anulados.has(e.id));
 
-  const porKind = new Map<string, { count: number; last: Date; zona: string }>();
+  const porKind = new Map<
+    string,
+    { count: number; last: Date; zona: string; payload: Record<string, unknown> }
+  >();
   for (const e of eventos) {
     const previo = porKind.get(e.kind);
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = JSON.parse(e.payloadJson) as Record<string, unknown>;
+    } catch {
+      /* un payload ilegible no debe vaciar la tarjeta */
+    }
     porKind.set(e.kind, {
       count: (previo?.count ?? 0) + 1,
       last: e.startedAt,
       zona: e.timezone,
+      payload,
     });
   }
 
@@ -96,11 +124,24 @@ export async function todayStatus(
       count += dato.count;
       if (!last || dato.last > last.fecha) last = { fecha: dato.last, zona: dato.zona };
     }
+    // El dato manda sobre la hora, pero solo donde dice más: en «Desperté» la
+    // hora ES el dato, así que ahí no se sustituye.
+    const ultimoKind = kinds
+      .map((k) => porKind.get(k))
+      .filter((d): d is NonNullable<typeof d> => Boolean(d))
+      .sort((a, b) => b.last.getTime() - a.last.getTime())[0];
+
+    const descripcion =
+      ultimoKind && count === 1 && CON_RESUMEN.has(flowId)
+        ? describir(kinds[0], ultimoKind.payload, ultimoKind.last, ultimoKind.zona)
+        : null;
+
     flows[flowId] = {
       count,
       // La hora se pinta en la zona del propio evento: un registro hecho de
       // viaje debe seguir mostrando la hora a la que ocurrió allí.
       lastAt: last ? horaLocal(last.fecha, last.zona) : null,
+      summary: descripcion?.summary ?? null,
     };
   }
 

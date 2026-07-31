@@ -24,6 +24,8 @@ export type CardStatus = {
   lastAt: string | null;
   /** Sesión o comida abierta ahora mismo. Solo gimnasio y comida. */
   open?: boolean;
+  /** Lo registrado, cuando dice más que la hora: «7h 12m», «78.4 kg». */
+  summary?: string | null;
   /**
    * Progreso hacia una meta, 0–1. Solo el agua.
    *
@@ -133,7 +135,9 @@ function leyenda(
   }
   if (status.count === 0) return "pendiente";
   if (status.count > 1) return `${status.count} hoy`;
-  return status.lastAt ?? "hecho";
+  // El dato antes que la hora: «7h 12m» dice más que «11:54», que además es
+  // cuándo lo guardaste y se confundía con la hora de acostarse.
+  return status.summary ?? status.lastAt ?? "hecho";
 }
 
 /**
@@ -154,6 +158,11 @@ function leyendaAccesible(
   if (status.count === 0) return "pendiente";
   if (status.count > 1) {
     return `${status.count} registros hoy${status.lastAt ? `, el último a las ${status.lastAt}` : ""}`;
+  }
+  // Lo mismo que la leyenda visible, ampliado. Si la tarjeta dice «7h 12m» y
+  // el lector dice «hecho a las 11:54», son dos interfaces y una miente.
+  if (status.summary) {
+    return `${status.summary}${status.lastAt ? `, guardado a las ${status.lastAt}` : ""}`;
   }
   return `hecho${status.lastAt ? ` a las ${status.lastAt}` : ""}`;
 }
