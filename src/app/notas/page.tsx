@@ -21,6 +21,8 @@ export default async function NotasPage() {
             text: n.text,
             tag: n.tag,
             at: n.at.toISOString(),
+            doneAt: n.doneAt?.toISOString() ?? null,
+            doneEventId: n.doneEventId,
           })),
         }))}
       />

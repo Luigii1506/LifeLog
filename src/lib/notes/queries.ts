@@ -17,6 +17,10 @@ export type Nota = {
   tag: string;
   at: Date;
   timezone: string;
+  /** Cuándo se marcó como hecha. Nulo si sigue pendiente. */
+  doneAt: Date | null;
+  /** El evento que la completó, para poder deshacerlo. */
+  doneEventId: string | null;
 };
 
 export type NotasPorDia = { dateKey: string; notas: Nota[] };
@@ -38,6 +42,12 @@ export async function recentNotes(
 
   const ocultos = await revokedAmong(eventos.map((e) => e.id));
 
+  // Las marcas de «hecha» viven en eventos aparte, con su propia hora. Se
+  // buscan sin límite de fecha: una nota de hace tres semanas se puede
+  // completar hoy, y buscarla solo en la ventana la dejaría eternamente
+  // pendiente.
+  const hechas = await marcasDeHecho(eventos.map((e) => e.id));
+
   const notas: Nota[] = [];
   for (const e of eventos) {
     if (ocultos.has(e.id)) continue;
@@ -45,6 +55,7 @@ export async function recentNotes(
       const p = JSON.parse(e.payloadJson) as { text?: string; tag?: string };
       const text = (p.text ?? "").trim();
       if (!text) continue;
+      const hecha = hechas.get(e.id) ?? null;
       notas.push({
         id: e.id,
         text,
@@ -53,12 +64,48 @@ export async function recentNotes(
         tag: p.tag || ETIQUETA_POR_DEFECTO,
         at: e.startedAt,
         timezone: e.timezone || timeZone,
+        doneAt: hecha?.at ?? null,
+        doneEventId: hecha?.id ?? null,
       });
     } catch {
       /* una fila ilegible no debe vaciar la bandeja */
     }
   }
   return notas;
+}
+
+/**
+ * Qué notas están hechas, de entre las que se le pasen.
+ *
+ * Una marca retirada no cuenta: desmarcar una nota tiene que devolverla a
+ * pendiente, o la casilla sería de un solo sentido.
+ */
+async function marcasDeHecho(
+  noteIds: string[],
+): Promise<Map<string, { id: string; at: Date }>> {
+  if (noteIds.length === 0) return new Map();
+
+  const marcas = await db.event.findMany({
+    where: { kind: "note.done" },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, startedAt: true, payloadJson: true },
+  });
+
+  const ocultas = await revokedAmong(marcas.map((m) => m.id));
+  const buscadas = new Set(noteIds);
+  const porNota = new Map<string, { id: string; at: Date }>();
+
+  for (const m of marcas) {
+    if (ocultas.has(m.id)) continue;
+    try {
+      const p = JSON.parse(m.payloadJson) as { noteId?: string };
+      if (!p.noteId || !buscadas.has(p.noteId) || porNota.has(p.noteId)) continue;
+      porNota.set(p.noteId, { id: m.id, at: m.startedAt });
+    } catch {
+      /* una marca ilegible deja la nota pendiente, que es lo seguro */
+    }
+  }
+  return porNota;
 }
 
 /**

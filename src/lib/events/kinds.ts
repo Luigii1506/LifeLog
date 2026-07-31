@@ -161,6 +161,19 @@ const quickNote = z.object({
   tag: z.string().optional(),
 });
 
+/**
+ * Marca una nota como hecha.
+ *
+ * Es un evento APARTE y no un campo de la nota porque es un hecho distinto,
+ * ocurrido en otro momento: escribiste «llamar al psiquiatra» a las 8 y lo
+ * hiciste a las 14. Metiéndolo en la nota se perdería una de las dos horas, y
+ * la interesante es justo la segunda.
+ */
+const noteDone = z.object({
+  /** ULID del evento `note.quick` que se completa. */
+  noteId: z.string().min(1),
+});
+
 export const EVENT_KINDS = {
   "sleep.logged": {
     domain: "health",
@@ -248,6 +261,12 @@ export const EVENT_KINDS = {
     version: 1,
     label: "Nota",
     schema: quickNote,
+  },
+  "note.done": {
+    domain: "life",
+    version: 1,
+    label: "Nota hecha",
+    schema: noteDone,
   },
 } as const satisfies Record<string, KindDefinition>;
 

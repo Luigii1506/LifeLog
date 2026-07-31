@@ -9,12 +9,14 @@ import { ETIQUETAS, ETIQUETA_POR_DEFECTO, etiquetaPorId } from "@/lib/notes/tags
  * sirve es poder encontrar lo apuntado, y de eso van el filtro y la agrupación.
  */
 
-const nota = (id: string, tag: string, iso: string): Nota => ({
+const nota = (id: string, tag: string, iso: string, doneAt?: string): Nota => ({
   id,
   text: `nota ${id}`,
   tag,
   at: new Date(iso),
   timezone: "America/Tijuana",
+  doneAt: doneAt ? new Date(doneAt) : null,
+  doneEventId: doneAt ? `${id}-done` : null,
 });
 
 describe("etiquetas", () => {
@@ -70,5 +72,31 @@ describe("contar para los filtros", () => {
   it("una etiqueta sin notas no aparece", () => {
     // El filtro solo enseña lo que tiene algo: uno que devuelve cero es ruido.
     expect(contarPorEtiqueta([])).toEqual({});
+  });
+});
+
+describe("notas hechas", () => {
+  it("una nota sin marca sigue pendiente", () => {
+    const n = nota("a", "pendiente", "2026-07-30T18:00:00Z");
+    expect(n.doneAt).toBeNull();
+    expect(n.doneEventId).toBeNull();
+  });
+
+  it("la hora de hacerla es distinta de la de escribirla", () => {
+    // Escribiste «llamar al psiquiatra» a las 8 y lo hiciste a las 14. Como
+    // campo de la nota se perdería una de las dos, y la interesante es la
+    // segunda: por eso completar es un evento aparte.
+    const n = nota("a", "pendiente", "2026-07-30T15:00:00Z", "2026-07-30T21:00:00Z");
+    expect(n.doneAt!.getTime()).toBeGreaterThan(n.at.getTime());
+  });
+
+  it("marcar no cambia el día en que se agrupa", () => {
+    // La nota pertenece al día en que la escribiste, no a aquel en que la
+    // hiciste: si saltara de grupo al marcarla, desaparecería de donde la
+    // estabas mirando.
+    const grupos = agruparPorDia([
+      nota("a", "pendiente", "2026-07-30T18:00:00Z", "2026-08-02T18:00:00Z"),
+    ]);
+    expect(grupos[0].dateKey).toBe("2026-07-30");
   });
 });

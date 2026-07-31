@@ -50,6 +50,58 @@ export async function saveNote(
   return { ok: true };
 }
 
+/**
+ * Marca una nota como hecha, o le quita la marca.
+ *
+ * Completar es un evento APARTE, con su propia hora: escribiste «llamar al
+ * psiquiatra» a las 8 y lo hiciste a las 14, y la hora interesante es la
+ * segunda. Metido como campo de la nota, se perdería una de las dos.
+ *
+ * Desmarcar retira la marca (I-02); la nota no se toca en ningún caso.
+ */
+export async function toggleNoteDone(
+  noteId: string,
+  doneEventId: string | null,
+  timeZone: string,
+): Promise<NoteResult> {
+  try {
+    if (doneEventId) {
+      const marca = await db.event.findUnique({
+        where: { id: doneEventId },
+        select: { timezone: true, payloadJson: true },
+      });
+      if (marca) {
+        await revoke(doneEventId, {
+          kind: "note.done",
+          payload: JSON.parse(marca.payloadJson),
+          timezone: marca.timezone,
+          source: `app:notas${SUFIJO_RETIRADO}`,
+        });
+      }
+    } else {
+      const nota = await db.event.findUnique({
+        where: { id: noteId },
+        select: { kind: true },
+      });
+      if (!nota || nota.kind !== "note.quick") {
+        return { ok: false, error: "Esa nota no existe" };
+      }
+      await emit({
+        kind: "note.done",
+        payload: { noteId },
+        timezone: timeZone,
+        source: "app:notas",
+      });
+    }
+  } catch (error) {
+    console.error("marcar nota falló", error);
+    return { ok: false, error: "No se pudo marcar" };
+  }
+  revalidatePath("/notas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function deleteNote(eventId: string): Promise<NoteResult> {
   try {
     const objetivo = await db.event.findUnique({
