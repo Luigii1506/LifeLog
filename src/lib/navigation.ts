@@ -14,6 +14,7 @@ const PADRES: [patron: RegExp, padre: string][] = [
   [/^\/agua$/, "/"],
   [/^\/suplementos$/, "/"],
   [/^\/notas$/, "/"],
+  [/^\/gasto$/, "/"],
   [/^\/gym$/, "/"],
 ];
 
@@ -59,6 +60,7 @@ export function titleOf(pathname: string): string | null {
   if (pathname.startsWith("/agua")) return "Agua";
   if (pathname.startsWith("/suplementos")) return "Suplementos";
   if (pathname.startsWith("/notas")) return "Notas";
+  if (pathname.startsWith("/gasto")) return "Gasto";
   if (pathname.startsWith("/registrar")) return "Registrar";
   return null;
 }

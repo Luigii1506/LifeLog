@@ -37,7 +37,7 @@ export const QUICK_FLOWS: {
   { id: "mood", label: "Ánimo", icon: "😊", steps: 2 },
   { id: "weight", label: "Peso", icon: "⚖️", steps: 1 },
   { id: "medication", label: "Suplementos", icon: "💊", steps: 1, href: "/suplementos" },
-  { id: "expense", label: "Gasto", icon: "💸", steps: 3 },
+  { id: "expense", label: "Gasto", icon: "💸", steps: 3, href: "/gasto" },
   { id: "focus", label: "Trabajo", icon: "🎯", steps: 2 },
   { id: "activity", label: "Actividad", icon: "⏱", steps: 1 },
   { id: "note", label: "Notas", icon: "📝", steps: 1, href: "/notas" },
