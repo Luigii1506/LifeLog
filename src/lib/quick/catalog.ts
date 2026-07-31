@@ -40,5 +40,5 @@ export const QUICK_FLOWS: {
   { id: "expense", label: "Gasto", icon: "💸", steps: 3 },
   { id: "focus", label: "Trabajo", icon: "🎯", steps: 2 },
   { id: "activity", label: "Actividad", icon: "⏱", steps: 1 },
-  { id: "note", label: "Nota", icon: "📝", steps: 1 },
+  { id: "note", label: "Notas", icon: "📝", steps: 1, href: "/notas" },
 ];

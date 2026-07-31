@@ -155,6 +155,10 @@ const ritualExecuted = z.object({
 
 const quickNote = z.object({
   text: z.string().min(1),
+  /// 'idea' · 'pendiente' · 'revisar' · 'nota'. Opcional: una nota sin
+  /// etiquetar sigue siendo una nota, y obligar a clasificar en el momento de
+  /// capturar es lo que hace que se deje de capturar.
+  tag: z.string().optional(),
 });
 
 export const EVENT_KINDS = {

@@ -38,6 +38,7 @@ export function VoiceFab() {
     { value: "/food", label: "comida comer desayuno cena almuerzo" },
     { value: "/agua", label: "agua tomar beber vaso hidratacion" },
     { value: "/suplementos", label: "suplementos proteina creatina pastillas vitaminas" },
+    { value: "/notas", label: "notas nota apuntar idea pendiente anotar" },
     ...QUICK_FLOWS.map((f) => ({ value: `/registrar/${f.id}`, label: f.label })),
   ];
 

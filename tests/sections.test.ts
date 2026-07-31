@@ -27,7 +27,9 @@ describe("dónde estoy", () => {
 
   it("los registros rápidos también están en la cadena", () => {
     expect(sectionIndex("/registrar/wake")).toBe(4);
-    expect(sectionIndex("/registrar/note")).toBe(SECCIONES.length - 1);
+    // El último eslabón se toma de la propia lista: lo que tiene pantalla
+    // propia —notas, suplementos— entra con su ruta, no con `/registrar/…`.
+    expect(sectionIndex(SECCIONES.at(-1)!.href)).toBe(SECCIONES.length - 1);
   });
 
   it("un prefijo no cuenta como coincidencia", () => {
@@ -65,7 +67,7 @@ describe("la cadena", () => {
     // Con una lista circular nunca sabes si avanzas o has vuelto al principio,
     // y con trece paradas eso se nota enseguida.
     expect(neighbour("/", -1)).toBeNull();
-    expect(neighbour("/registrar/note", 1)).toBeNull();
+    expect(neighbour(SECCIONES.at(-1)!.href, 1)).toBeNull();
   });
 
   it("el orden es el del día: agua primero", () => {
@@ -88,9 +90,14 @@ describe("la cadena", () => {
     );
   });
 
-  it("los suplementos tienen pantalla propia dentro de la cadena", () => {
-    expect(SECCIONES.map((s) => s.href)).toContain("/suplementos");
-    expect(SECCIONES.map((s) => s.href)).not.toContain("/registrar/medication");
+  it("lo que tiene pantalla propia entra con su ruta", () => {
+    // Suplementos y notas no son flujos de preguntas: son rejilla y bandeja.
+    // Siguen en la cadena, pero por su propia ruta.
+    const rutas = SECCIONES.map((s) => s.href);
+    expect(rutas).toContain("/suplementos");
+    expect(rutas).toContain("/notas");
+    expect(rutas).not.toContain("/registrar/medication");
+    expect(rutas).not.toContain("/registrar/note");
   });
 
   it("la barra lleva solo las cuatro principales", () => {
