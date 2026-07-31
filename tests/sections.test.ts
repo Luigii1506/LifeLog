@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SECCIONES, neighbour, sectionIndex } from "@/lib/sections";
+import { EN_BARRA, SECCIONES, neighbour, sectionIndex } from "@/lib/sections";
+import { QUICK_FLOWS } from "@/lib/quick/catalog";
 
 /**
  * Cadena de secciones para el gesto de deslizar.
  *
- * Una sola lista sirve a la barra inferior y al gesto. Si cada una tuviera la
- * suya, deslizar te llevaría a un sitio distinto del que marca la pestaña, y un
- * gesto que no es predecible no se usa.
+ * El orden visible es la REJILLA DE HOY: Agua, Gimnasio, Comida y después los
+ * registros rápidos. Un gesto que salta a un sitio que no puedes prever no se
+ * usa, así que la cadena y la rejilla salen de la misma lista.
  */
 
 describe("dónde estoy", () => {
@@ -24,22 +25,37 @@ describe("dónde estoy", () => {
     expect(sectionIndex("/agua/historial")).toBe(1);
   });
 
-  it("una pantalla que no es sección queda fuera de la cadena", () => {
-    // Registrar el peso no está en la barra: deslizar ahí no debe saltar a
-    // ningún sitio, porque no hay pestaña que diga dónde estás.
-    expect(sectionIndex("/registrar/weight")).toBe(-1);
-    expect(neighbour("/registrar/weight", 1)).toBeNull();
+  it("los registros rápidos también están en la cadena", () => {
+    expect(sectionIndex("/registrar/wake")).toBe(4);
+    expect(sectionIndex("/registrar/note")).toBe(SECCIONES.length - 1);
+  });
+
+  it("un prefijo no cuenta como coincidencia", () => {
+    // `/registrar/wake` es prefijo de nada, pero la comparación descuidada
+    // haría casar `/registrar/weight` con él y deslizar saltaría mal.
+    expect(SECCIONES[sectionIndex("/registrar/weight")].label).toBe("Peso");
+    expect(SECCIONES[sectionIndex("/registrar/wake")].label).toBe("Desperté");
+  });
+
+  it("una ruta desconocida queda fuera", () => {
+    expect(sectionIndex("/login")).toBe(-1);
+    expect(neighbour("/login", 1)).toBeNull();
   });
 });
 
 describe("la cadena", () => {
-  it("avanza en el orden de la barra", () => {
+  it("avanza en el orden de la rejilla de Hoy", () => {
     expect(neighbour("/", 1)).toBe("/agua");
     expect(neighbour("/agua", 1)).toBe("/gym");
     expect(neighbour("/gym", 1)).toBe("/food");
+    // Y sigue hacia los registros rápidos, sin cortarse en las cuatro
+    // principales: la rejilla no se corta ahí.
+    expect(neighbour("/food", 1)).toBe("/registrar/wake");
+    expect(neighbour("/registrar/wake", 1)).toBe("/registrar/sleep");
   });
 
   it("retrocede igual", () => {
+    expect(neighbour("/registrar/wake", -1)).toBe("/food");
     expect(neighbour("/food", -1)).toBe("/gym");
     expect(neighbour("/gym", -1)).toBe("/agua");
     expect(neighbour("/agua", -1)).toBe("/");
@@ -47,13 +63,29 @@ describe("la cadena", () => {
 
   it("no da la vuelta en los extremos", () => {
     // Con una lista circular nunca sabes si avanzas o has vuelto al principio,
-    // y el gesto pierde el sentido de posición que le da la barra.
+    // y con trece paradas eso se nota enseguida.
     expect(neighbour("/", -1)).toBeNull();
-    expect(neighbour("/food", 1)).toBeNull();
+    expect(neighbour("/registrar/note", 1)).toBeNull();
   });
 
   it("el orden es el del día: agua primero", () => {
     // Se bebe agua todo el rato, se entrena una vez, se come varias.
-    expect(SECCIONES.map((s) => s.href)).toEqual(["/", "/agua", "/gym", "/food"]);
+    expect(SECCIONES.slice(0, 4).map((s) => s.href)).toEqual([
+      "/", "/agua", "/gym", "/food",
+    ]);
+  });
+
+  it("los registros rápidos van en el orden de la rejilla", () => {
+    // Salen de `QUICK_FLOWS`, la misma lista que pinta las tarjetas. Si se
+    // reordenan ahí, la cadena se reordena sola — con dos listas separadas,
+    // deslizar acabaría llevando a un sitio distinto del que enseña Hoy.
+    expect(SECCIONES.slice(4).map((s) => s.href)).toEqual(
+      QUICK_FLOWS.map((f) => `/registrar/${f.id}`),
+    );
+  });
+
+  it("la barra lleva solo las cuatro principales", () => {
+    // Trece pestañas harían cada una intocable con el pulgar.
+    expect(EN_BARRA.map((s) => s.label)).toEqual(["Hoy", "Agua", "Gimnasio", "Comida"]);
   });
 });

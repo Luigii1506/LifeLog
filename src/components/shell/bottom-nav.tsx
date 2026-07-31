@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SECCIONES } from "@/lib/sections";
+import { EN_BARRA } from "@/lib/sections";
 
 /**
  * Barra inferior fija.
@@ -17,9 +17,9 @@ import { SECCIONES } from "@/lib/sections";
  * pequeño y estaba pegado a tres enlaces que no querías tocar mientras hablas.
  * Ahora es un botón flotante propio (`VoiceFab`), más grande y sin vecinos.
  *
- * El orden de las pestañas es el MISMO que el del gesto de deslizar, y sale de
- * la misma lista (`lib/sections`). La barra es lo que convierte el gesto en
- * algo predecible: sin ella no sabrías cuántas secciones hay ni dónde estás.
+ * Solo lleva las cuatro principales. La cadena de deslizar es más larga —pasa
+ * por todos los registros rápidos— y su orden visible es la rejilla de Hoy, no
+ * esta barra: meter doce pestañas aquí haría cada una intocable con el pulgar.
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -31,7 +31,7 @@ export function BottomNav() {
       aria-label="Navegación principal"
     >
       <div className="mx-auto flex w-full max-w-2xl items-stretch">
-        {SECCIONES.map((tab) => {
+        {EN_BARRA.map((tab) => {
           const activo =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (
