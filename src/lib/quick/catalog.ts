@@ -23,12 +23,20 @@ export const QUICK_FLOWS: {
   label: string;
   icon: string;
   steps: number;
+  /**
+   * Ruta propia, para lo que no cabe en un flujo de preguntas.
+   *
+   * Los suplementos son una rejilla con dosis distintas por producto y varias
+   * tomas al día: eso no es una secuencia de preguntas. Se queda en la lista
+   * para que Hoy y el gesto de deslizar lo sigan incluyendo en su sitio.
+   */
+  href?: string;
 }[] = [
   { id: "wake", label: "Desperté", icon: "🌅", steps: 1 },
   { id: "sleep", label: "Sueño", icon: "😴", steps: 1 },
   { id: "mood", label: "Ánimo", icon: "😊", steps: 2 },
   { id: "weight", label: "Peso", icon: "⚖️", steps: 1 },
-  { id: "medication", label: "Medicamento", icon: "💊", steps: 1 },
+  { id: "medication", label: "Suplementos", icon: "💊", steps: 1, href: "/suplementos" },
   { id: "expense", label: "Gasto", icon: "💸", steps: 3 },
   { id: "focus", label: "Trabajo", icon: "🎯", steps: 2 },
   { id: "activity", label: "Actividad", icon: "⏱", steps: 1 },

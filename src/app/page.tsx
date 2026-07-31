@@ -96,7 +96,7 @@ export default async function TodayPage() {
         {QUICK_FLOWS.map((flujo) => (
           <TodayCard
             key={flujo.id}
-            href={`/registrar/${flujo.id}`}
+            href={flujo.href ?? `/registrar/${flujo.id}`}
             icon={flujo.icon}
             label={flujo.label}
             flowId={flujo.id}

@@ -37,6 +37,7 @@ export function VoiceFab() {
     { value: "/gym", label: "gimnasio pesas entrenar entrenamiento" },
     { value: "/food", label: "comida comer desayuno cena almuerzo" },
     { value: "/agua", label: "agua tomar beber vaso hidratacion" },
+    { value: "/suplementos", label: "suplementos proteina creatina pastillas vitaminas" },
     ...QUICK_FLOWS.map((f) => ({ value: `/registrar/${f.id}`, label: f.label })),
   ];
 

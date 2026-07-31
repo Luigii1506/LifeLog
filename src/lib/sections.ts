@@ -35,7 +35,7 @@ const PRINCIPALES: Section[] = [
 export const SECCIONES: Section[] = [
   ...PRINCIPALES,
   ...QUICK_FLOWS.map((f) => ({
-    href: `/registrar/${f.id}`,
+    href: f.href ?? `/registrar/${f.id}`,
     label: f.label,
     icon: f.icon,
   })),
