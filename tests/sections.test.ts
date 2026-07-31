@@ -79,9 +79,18 @@ describe("la cadena", () => {
     // Salen de `QUICK_FLOWS`, la misma lista que pinta las tarjetas. Si se
     // reordenan ahí, la cadena se reordena sola — con dos listas separadas,
     // deslizar acabaría llevando a un sitio distinto del que enseña Hoy.
+    //
+    // El `href` de la entrada manda sobre la ruta por defecto: lo que no cabe
+    // en un flujo de preguntas —los suplementos son una rejilla con dosis
+    // distintas— tiene pantalla propia sin salirse de la cadena.
     expect(SECCIONES.slice(4).map((s) => s.href)).toEqual(
-      QUICK_FLOWS.map((f) => `/registrar/${f.id}`),
+      QUICK_FLOWS.map((f) => f.href ?? `/registrar/${f.id}`),
     );
+  });
+
+  it("los suplementos tienen pantalla propia dentro de la cadena", () => {
+    expect(SECCIONES.map((s) => s.href)).toContain("/suplementos");
+    expect(SECCIONES.map((s) => s.href)).not.toContain("/registrar/medication");
   });
 
   it("la barra lleva solo las cuatro principales", () => {
