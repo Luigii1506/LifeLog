@@ -23,7 +23,20 @@ export const RECIPIENTES: { ml: number; label: string; icon: string }[] = [
   { ml: 1000, label: "Litro", icon: "🫙" },
 ];
 
-/** «1,2 L» o «750 ml». En litros a partir del litro, que es como se habla. */
+/**
+ * Siempre en litros: «0 L», «0,25 L», «1,5 L».
+ *
+ * Es el formato del ANILLO, donde la cifra se compara con la meta que está
+ * justo debajo. Mezclar unidades —«250 ml» sobre «de 2 L»— obliga a convertir
+ * mentalmente cada vez que miras, que es lo contrario de un vistazo.
+ */
+export function formatoLitros(ml: number): string {
+  const litros = ml / 1000;
+  return `${litros.toLocaleString("es-MX", { maximumFractionDigits: 2 })} L`;
+}
+
+/** «1,2 L» o «750 ml». En litros a partir del litro, que es como se habla.
+ *  Para textos sueltos, donde no hay nada con lo que comparar. */
 export function formatoAgua(ml: number): string {
   if (ml < 1000) return `${ml} ml`;
   return `${(ml / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })} L`;

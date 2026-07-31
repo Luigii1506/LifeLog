@@ -119,3 +119,16 @@ describe("metas y formato", () => {
     expect(formatoAgua(2000)).toBe("2 L");
   });
 });
+
+describe("el anillo habla en una sola unidad", () => {
+  it("dentro del aro todo va en litros", async () => {
+    // Antes decía «250 ml» encima de «de 2 L»: dos unidades pegadas obligan a
+    // convertir mentalmente cada vez que miras, que es lo contrario de un
+    // vistazo. Y con el total en cero, «0 ml» sobre «de 2 L» no se entendía.
+    const { formatoLitros } = await import("@/lib/water/units");
+    expect(formatoLitros(0)).toBe("0 L");
+    expect(formatoLitros(250)).toBe("0.25 L");
+    expect(formatoLitros(1500)).toBe("1.5 L");
+    expect(formatoLitros(2000)).toBe("2 L");
+  });
+});

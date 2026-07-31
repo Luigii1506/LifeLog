@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logWater, undoWater } from "@/app/agua/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
-import { formatoAgua } from "@/lib/water/units";
+import { CustomAmount } from "./custom-amount";
+import { WaterRing } from "./water-ring";
 
 /**
  * Registro de agua.
@@ -20,7 +21,12 @@ import { formatoAgua } from "@/lib/water/units";
  * llevado al extremo.
  */
 
-export type Entry = { id: string; ml: number; at: string; vessel: string | null };
+export type Entry = {
+  id: string;
+  ml: number;
+  at: string;
+  vessel: string | null;
+};
 
 export function WaterTracker({
   totalMl,
@@ -38,17 +44,34 @@ export function WaterTracker({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [libre, setLibre] = useState(false);
   /** Lo recién tocado, para que el anillo responda antes que la red. */
   const [optimista, setOptimista] = useState(0);
 
-  const total = totalMl + optimista;
-  const cumplida = total >= goalMl;
-  const excelente = total >= excellentMl;
+  /**
+   * El optimismo se descuenta cuando LLEGAN los datos nuevos, no al recibir el
+   * «ok» del servidor.
+   *
+   * Ponerlo a cero antes hacía que el aro retrocediera un instante: el servidor
+   * confirmaba, se borraba el optimismo, y `totalMl` seguía siendo el viejo
+   * hasta que `router.refresh()` traía el nuevo. Ese salto atrás y adelante era
+   * la animación rara.
+   */
+  const anterior = useRef(totalMl);
+  useEffect(() => {
+    if (totalMl !== anterior.current) {
+      anterior.current = totalMl;
+      setOptimista(0);
+    }
+  }, [totalMl]);
+
+  const total = Math.max(0, totalMl + optimista);
 
   function registrar(ml: number, vessel: string | null) {
     setError(null);
-    // El anillo se mueve YA. Con diez registros al día, esperar a la red en
-    // cada uno convierte la pantalla en algo que se siente lento.
+    setLibre(false);
+    // El aro se mueve YA. Con diez registros al día, esperar a la red en cada
+    // uno convierte la pantalla en algo que se siente lento.
     setOptimista((prev) => prev + ml);
     startTransition(async () => {
       const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -57,7 +80,6 @@ export function WaterTracker({
         setOptimista((prev) => prev - ml);
         setError(r.error);
       } else {
-        setOptimista(0);
         router.refresh();
       }
     });
@@ -72,7 +94,6 @@ export function WaterTracker({
         setOptimista((prev) => prev + ml);
         setError(r.error);
       } else {
-        setOptimista(0);
         router.refresh();
       }
     });
@@ -92,39 +113,55 @@ export function WaterTracker({
     ]);
     if (!elegido) return false;
     const ml = Number(elegido.value);
-    registrar(ml, presets.find((p) => p.ml === ml)?.label.toLowerCase() ?? null);
+    registrar(
+      ml,
+      presets.find((p) => p.ml === ml)?.label.toLowerCase() ?? null,
+    );
     return true;
   });
 
   return (
     <div className="space-y-6">
-      <Anillo
-        total={total}
-        goalMl={goalMl}
-        excellentMl={excellentMl}
-        cumplida={cumplida}
-        excelente={excelente}
-      />
+      <WaterRing total={total} goalMl={goalMl} excellentMl={excellentMl} />
 
-      <div className="grid grid-cols-2 gap-2.5">
-        {presets.map((p) => (
+      {libre ? (
+        <CustomAmount
+          busy={pending}
+          onCancel={() => setLibre(false)}
+          onConfirm={(ml) => registrar(ml, null)}
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5">
+          {presets.map((p) => (
+            <button
+              key={p.ml}
+              disabled={pending}
+              onClick={() => registrar(p.ml, p.label.toLowerCase())}
+              className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-surface py-5 transition active:scale-[0.96] disabled:opacity-50"
+            >
+              <span className="text-3xl">{p.icon}</span>
+              <span className="text-sm font-medium">{p.label}</span>
+              <span className="font-mono text-[11px] tabular-nums text-muted">
+                {p.ml >= 1000 ? `${p.ml / 1000} L` : `${p.ml} ml`}
+              </span>
+            </button>
+          ))}
+
           <button
-            key={p.ml}
             disabled={pending}
-            onClick={() => registrar(p.ml, p.label.toLowerCase())}
-            className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-surface py-5 transition active:scale-[0.96] disabled:opacity-50"
+            onClick={() => setLibre(true)}
+            className="col-span-2 rounded-2xl border border-dashed border-line py-3.5 text-sm text-muted transition active:scale-[0.98] disabled:opacity-50"
           >
-            <span className="text-3xl">{p.icon}</span>
-            <span className="text-sm font-medium">{p.label}</span>
-            <span className="font-mono text-[11px] tabular-nums text-muted">
-              {p.ml >= 1000 ? `${p.ml / 1000} L` : `${p.ml} ml`}
-            </span>
+            Otra cantidad
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {error && (
-        <p role="status" className="rounded-lg bg-accent px-4 py-3 text-center font-medium text-white">
+        <p
+          role="status"
+          className="rounded-lg bg-accent px-4 py-3 text-center font-medium text-white"
+        >
           {error}
         </p>
       )}
@@ -148,7 +185,9 @@ export function WaterTracker({
                     })}
                   </span>
                   <span className="flex-1 text-sm">
-                    {e.vessel ? e.vessel.charAt(0).toUpperCase() + e.vessel.slice(1) : "Agua"}
+                    {e.vessel
+                      ? e.vessel.charAt(0).toUpperCase() + e.vessel.slice(1)
+                      : "Agua"}
                   </span>
                   <span className="font-mono text-sm tabular-nums">
                     {e.ml >= 1000 ? `${e.ml / 1000} L` : `${e.ml} ml`}
@@ -169,77 +208,6 @@ export function WaterTracker({
           </ol>
         </section>
       )}
-    </div>
-  );
-}
-
-/**
- * Anillo de progreso.
- *
- * Dos umbrales, no uno: la meta (2 L) y lo excelente (3 L). El tramo entre
- * ambos se dibuja como un segundo arco más tenue — así se ve que hay algo
- * después de cumplir, en vez de una barra llena que ya no dice nada.
- */
-function Anillo({
-  total,
-  goalMl,
-  excellentMl,
-  cumplida,
-  excelente,
-}: {
-  total: number;
-  goalMl: number;
-  excellentMl: number;
-  cumplida: boolean;
-  excelente: boolean;
-}) {
-  const R = 88;
-  const CIRC = 2 * Math.PI * R;
-
-  const hastaMeta = Math.min(total, goalMl) / goalMl;
-  const extra = Math.max(0, Math.min(total, excellentMl) - goalMl) / (excellentMl - goalMl);
-
-  return (
-    <div className="relative mx-auto flex size-56 items-center justify-center">
-      <svg viewBox="0 0 200 200" className="absolute size-full -rotate-90">
-        <circle
-          cx="100" cy="100" r={R} fill="none"
-          className="stroke-line" strokeWidth="12"
-        />
-        {/* Tramo de bonus, detrás: solo se ve al pasar la meta. */}
-        {extra > 0 && (
-          <circle
-            cx="100" cy="100" r={R} fill="none"
-            className="stroke-done/40" strokeWidth="12" strokeLinecap="round"
-            strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - extra)}
-          />
-        )}
-        <circle
-          cx="100" cy="100" r={R} fill="none"
-          strokeWidth="12" strokeLinecap="round"
-          className={`transition-all duration-500 ${cumplida ? "stroke-done" : "stroke-accent"}`}
-          strokeDasharray={CIRC}
-          strokeDashoffset={CIRC * (1 - hastaMeta)}
-        />
-      </svg>
-
-      <div className="relative text-center">
-        <div className="font-mono text-4xl tabular-nums">{formatoAgua(total)}</div>
-        <div className="mt-1 text-xs text-muted">
-          de {formatoAgua(goalMl)}
-        </div>
-        {excelente ? (
-          <div className="mt-2 text-sm font-medium text-done">Excelente</div>
-        ) : cumplida ? (
-          <div className="mt-2 text-sm font-medium text-done">
-            Meta cumplida · {formatoAgua(excellentMl - total)} para excelente
-          </div>
-        ) : (
-          <div className="mt-2 text-sm text-muted">
-            faltan {formatoAgua(goalMl - total)}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
