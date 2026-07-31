@@ -24,6 +24,14 @@ export type CardStatus = {
   lastAt: string | null;
   /** Sesión o comida abierta ahora mismo. Solo gimnasio y comida. */
   open?: boolean;
+  /**
+   * Progreso hacia una meta, 0–1. Solo el agua.
+   *
+   * El agua no se cuenta en veces sino en cantidad: «3 registros» no informa,
+   * «1,5 de 2 L» sí. Por eso su tarjeta lleva barra y no marca de hecho.
+   */
+  progress?: number;
+  progressLabel?: string;
 };
 
 export function TodayCard({
@@ -48,7 +56,10 @@ export function TodayCard({
   const draft = useDraft(flowId);
 
   const enCurso = Boolean(draft) || status.open;
-  const hecho = status.count > 0 && !enCurso;
+  const conMeta = status.progress !== undefined;
+  // Con meta, «hecho» es haberla cumplido, no haber registrado algo: un vaso
+  // de agua no es el día resuelto.
+  const hecho = conMeta ? status.progress! >= 1 : status.count > 0 && !enCurso;
 
   const borde = enCurso
     ? "border-accent"
@@ -83,6 +94,20 @@ export function TodayCard({
       <span className={destacada ? "text-3xl" : "text-2xl"}>{icon}</span>
       <span className={`font-medium ${destacada ? "" : "text-sm"}`}>{label}</span>
 
+      {conMeta && (
+        <span
+          className="mt-0.5 h-1 w-10 overflow-hidden rounded-full bg-line"
+          aria-hidden
+        >
+          <span
+            className={`block h-full rounded-full transition-all duration-500 ${
+              hecho ? "bg-done" : "bg-accent"
+            }`}
+            style={{ width: `${Math.round(Math.min(1, status.progress!) * 100)}%` }}
+          />
+        </span>
+      )}
+
       <span
         className={`text-[11px] tabular-nums ${
           enCurso ? "font-medium text-accent" : hecho ? "text-done" : "text-muted"
@@ -99,6 +124,7 @@ function leyenda(
   draft: Draft | null,
   totalSteps?: number,
 ): string {
+  if (status.progressLabel) return status.progressLabel;
   if (status.open) return "sin cerrar";
   if (draft) {
     return totalSteps
@@ -122,6 +148,7 @@ function leyendaAccesible(
   draft: Draft | null,
   totalSteps?: number,
 ): string {
+  if (status.progressLabel) return status.progressLabel;
   if (status.open) return "sin cerrar, toca para continuar";
   if (draft) return `a medias, ${leyenda(status, draft, totalSteps)}`;
   if (status.count === 0) return "pendiente";

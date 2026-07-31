@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { dayBounds, revokedAmong } from "@/lib/events/query";
 import type { EventKind } from "@/lib/events/kinds";
 import type { QuickFlowId } from "./catalog";
+import { EXCELENTE_ML, META_ML } from "@/lib/water/units";
 
 /**
  * Qué se ha registrado ya hoy.
@@ -36,6 +37,7 @@ export type TodayStatus = {
   flows: Record<string, FlowStatus>;
   gym: { count: number; open: boolean };
   food: { count: number; open: boolean };
+  water: { totalMl: number; goalMl: number; excellentMl: number };
 };
 
 function horaLocal(fecha: Date, timeZone: string): string {
@@ -62,7 +64,7 @@ export async function todayStatus(
   const [todos, sesionAbierta, comidaAbierta] = await Promise.all([
     db.event.findMany({
       where: { startedAt: { gte: start, lt: end } },
-      select: { id: true, kind: true, startedAt: true, timezone: true },
+      select: { id: true, kind: true, startedAt: true, timezone: true, payloadJson: true },
       orderBy: { startedAt: "asc" },
     }),
     db.workoutSession.findFirst({ where: { status: "open" }, select: { id: true } }),
@@ -102,9 +104,23 @@ export async function todayStatus(
     };
   }
 
+  // El agua se suma aparte: la tarjeta no dice «3 veces» sino «1,5 de 2 L».
+  // Cuántas veces bebiste no le importa a nadie; cuánto llevas, sí.
+  let totalMl = 0;
+  for (const e of eventos) {
+    if (e.kind !== "water.logged") continue;
+    try {
+      const p = JSON.parse(e.payloadJson) as { ml?: number };
+      if (typeof p.ml === "number") totalMl += p.ml;
+    } catch {
+      /* una fila ilegible no debe vaciar la pantalla */
+    }
+  }
+
   return {
     flows,
     gym: { count: porKind.get("workout.session")?.count ?? 0, open: Boolean(sesionAbierta) },
     food: { count: porKind.get("meal.logged")?.count ?? 0, open: Boolean(comidaAbierta) },
+    water: { totalMl, goalMl: META_ML, excellentMl: EXCELENTE_ML },
   };
 }

@@ -11,6 +11,7 @@ export type NavDestination = { value: string; label: string };
 const PADRES: [patron: RegExp, padre: string][] = [
   [/^\/registrar\//, "/"],
   [/^\/food$/, "/"],
+  [/^\/agua$/, "/"],
   [/^\/gym$/, "/"],
 ];
 
@@ -53,6 +54,7 @@ export function titleOf(pathname: string): string | null {
   if (pathname === "/") return null;
   if (pathname.startsWith("/gym")) return "Gimnasio";
   if (pathname.startsWith("/food")) return "Comida";
+  if (pathname.startsWith("/agua")) return "Agua";
   if (pathname.startsWith("/registrar")) return "Registrar";
   return null;
 }

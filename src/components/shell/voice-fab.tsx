@@ -36,6 +36,7 @@ export function VoiceFab() {
     ...ORDENES_NAVEGACION,
     { value: "/gym", label: "gimnasio pesas entrenar entrenamiento" },
     { value: "/food", label: "comida comer desayuno cena almuerzo" },
+    { value: "/agua", label: "agua tomar beber vaso hidratacion" },
     ...QUICK_FLOWS.map((f) => ({ value: `/registrar/${f.id}`, label: f.label })),
   ];
 

@@ -67,6 +67,18 @@ const medicationTaken = z.object({
   note: z.string().optional(),
 });
 
+const waterLogged = z.object({
+  /// Mililitros. Entero: nadie bebe 249,7 ml, y el decimal invita a precisión
+  /// falsa en un dato que se estima a ojo.
+  ///
+  /// Se admite 0 porque deshacer un registro es emitir uno que lo anula (I-02),
+  /// y ese anulador significa «no bebí nada»: sumándolo, el total no cambia. Si
+  /// exigiera un positivo, deshacer añadiría agua que no bebiste.
+  ml: z.number().int().min(0).max(3000),
+  /// 'vaso' · 'botella' · 'termo'. Para reconstruir de dónde salió la cifra.
+  vessel: z.string().optional(),
+});
+
 const moodLogged = z.object({
   score: z.number().int().min(1).max(10),
   label: z.string().optional(),
@@ -153,6 +165,12 @@ export const EVENT_KINDS = {
     schema: sleepLogged,
   },
   "wake.up": { domain: "health", version: 1, label: "Desperté", schema: wakeUp },
+  "water.logged": {
+    domain: "health",
+    version: 1,
+    label: "Agua",
+    schema: waterLogged,
+  },
   "weight.logged": {
     domain: "health",
     version: 1,

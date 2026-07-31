@@ -4,6 +4,7 @@ import { TodayCard } from "@/components/quick/today-card";
 import { openActivities, timelineForDay } from "@/lib/events/query";
 import { QUICK_FLOWS } from "@/lib/quick/catalog";
 import { todayStatus } from "@/lib/quick/status";
+import { formatoAgua } from "@/lib/water/units";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,19 @@ export default async function TodayPage() {
       </div>
 
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <TodayCard
+          href="/agua"
+          icon="💧"
+          label="Agua"
+          destacada
+          status={{
+            count: estado.water.totalMl > 0 ? 1 : 0,
+            lastAt: null,
+            progress: estado.water.totalMl / estado.water.goalMl,
+            progressLabel: etiquetaAgua(estado.water),
+          }}
+        />
         <TodayCard
           href="/gym"
           icon="🏋️"
@@ -102,6 +115,21 @@ export default async function TodayPage() {
       </section>
     </main>
   );
+}
+
+/** «1,5 de 2 L», «meta cumplida», «excelente». */
+function etiquetaAgua({
+  totalMl,
+  goalMl,
+  excellentMl,
+}: {
+  totalMl: number;
+  goalMl: number;
+  excellentMl: number;
+}): string {
+  if (totalMl >= excellentMl) return "excelente";
+  if (totalMl >= goalMl) return "meta cumplida";
+  return `${formatoAgua(totalMl)} de ${formatoAgua(goalMl)}`;
 }
 
 function saludo(date: Date) {
