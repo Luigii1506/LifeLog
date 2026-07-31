@@ -79,3 +79,16 @@ select {
     animation: none;
   }
 }
+
+/* Acuse de recibo al registrar agua: sube y se desvanece. Un vaso mueve el aro
+   un octavo de vuelta, y sin esto el toque parece no haber hecho nada. */
+@keyframes acuse {
+  0% { opacity: 0; transform: translateY(8px); }
+  25% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; transform: translateY(-4px); }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[acuse_1400ms_ease-out\] { animation: none; }
+}

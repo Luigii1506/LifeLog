@@ -45,6 +45,8 @@ export function WaterTracker({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [libre, setLibre] = useState(false);
+  /** Lo último registrado, para acusar recibo del toque. */
+  const [acuse, setAcuse] = useState<number | null>(null);
   /** Lo recién tocado, para que el anillo responda antes que la red. */
   const [optimista, setOptimista] = useState(0);
 
@@ -73,6 +75,10 @@ export function WaterTracker({
     // El aro se mueve YA. Con diez registros al día, esperar a la red en cada
     // uno convierte la pantalla en algo que se siente lento.
     setOptimista((prev) => prev + ml);
+    // El aro se mueve poco con un vaso sobre dos litros —un octavo de vuelta—
+    // así que sin esto el toque parece no haber hecho nada.
+    setAcuse(ml);
+    window.setTimeout(() => setAcuse(null), 1400);
     startTransition(async () => {
       const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const r = await logWater(ml, vessel, zona);
@@ -122,7 +128,17 @@ export function WaterTracker({
 
   return (
     <div className="space-y-6">
-      <WaterRing total={total} goalMl={goalMl} excellentMl={excellentMl} />
+      <div className="relative">
+        <WaterRing total={total} goalMl={goalMl} excellentMl={excellentMl} />
+        {acuse !== null && (
+          <span
+            role="status"
+            className="animate-[acuse_1400ms_ease-out] pointer-events-none absolute inset-x-0 top-6 text-center font-mono text-lg font-medium text-done"
+          >
+            +{acuse >= 1000 ? `${acuse / 1000} L` : `${acuse} ml`}
+          </span>
+        )}
+      </div>
 
       {libre ? (
         <CustomAmount
@@ -132,6 +148,13 @@ export function WaterTracker({
         />
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
+          {/* La pregunta explícita separa el marcador de las respuestas. Sin
+              ella, el aro parecía la primera opción de una lista. Es el mismo
+              patrón que usa todo el resto de la app: una pregunta, y debajo
+              lo que se puede tocar. */}
+          <h2 className="col-span-2 text-center text-lg font-medium">
+            ¿Cuánto tomaste?
+          </h2>
           {presets.map((p) => (
             <button
               key={p.ml}

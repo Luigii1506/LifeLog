@@ -13,6 +13,11 @@ import { formatoAgua, formatoLitros } from "@/lib/water/units";
  * Dos umbrales, no uno. El arco fuerte llena hasta la meta; pasada, un segundo
  * arco más tenue avanza hacia lo excelente. Una barra que se llena y ya no dice
  * nada desperdicia justo el momento en que queda algo que perseguir.
+ *
+ * NO se toca, y eso hay que decirlo con el diseño: un círculo grande con un
+ * número, en una app donde todo lo demás se pulsa, se lee como un botón. Lleva
+ * la etiqueta «HOY» encima para que se lea como un marcador, y debajo va la
+ * pregunta que sí tiene respuesta pulsable.
  */
 export function WaterRing({
   total,
@@ -36,7 +41,10 @@ export function WaterRing({
       : 0;
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-[11px] font-medium tracking-[0.14em] text-muted uppercase">
+        Hoy
+      </span>
       <div className="relative size-52">
         <svg viewBox="0 0 200 200" className="size-full -rotate-90">
           <circle
