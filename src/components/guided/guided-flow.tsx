@@ -260,8 +260,13 @@ function ChoiceStep({
 
   return (
     <div className="space-y-2">
+      {/* El tamaño depende de cuántas quepan por fila. En cinco columnas cada
+          celda mide unos 58 px en un móvil: con la etiqueta a 16 px, «Excelente»
+          no entra y la rejilla se ve apretada. */}
       <div
-        className={`grid gap-2 ${
+        className={`grid ${
+          step.columns === 5 ? "gap-1.5" : "gap-2"
+        } ${
           step.columns === 1
             ? "grid-cols-1"
             : step.columns === 3
@@ -283,15 +288,31 @@ function ChoiceStep({
                 label: opcion.label,
               })
             }
-            className={`flex flex-col items-start justify-between rounded-xl border border-line bg-surface text-left transition active:scale-[0.97] disabled:opacity-50 ${
-              step.columns && step.columns >= 3
-                ? "items-center p-3 text-center"
-                : "min-h-24 p-4"
+            className={`flex flex-col rounded-xl border border-line bg-surface transition active:scale-[0.97] disabled:opacity-50 ${
+              step.columns === 5
+                ? "items-center gap-1 px-1 py-3 text-center"
+                : step.columns === 3
+                  ? "items-center gap-1.5 p-3 text-center"
+                  : "min-h-24 items-start justify-between p-4 text-left"
             }`}
           >
-            {opcion.icon && <span className="text-2xl leading-none">{opcion.icon}</span>}
-            <span className="mt-2">
-              <span className="block font-medium">{opcion.label}</span>
+            {opcion.icon && (
+              <span
+                className={`leading-none ${
+                  step.columns === 5 ? "text-3xl" : "text-2xl"
+                }`}
+              >
+                {opcion.icon}
+              </span>
+            )}
+            <span className={step.columns && step.columns >= 3 ? "" : "mt-2"}>
+              <span
+                className={`block leading-tight font-medium ${
+                  step.columns === 5 ? "text-[10px]" : ""
+                }`}
+              >
+                {opcion.label}
+              </span>
               {opcion.meta && (
                 <span className="mt-0.5 block text-xs text-muted">{opcion.meta}</span>
               )}

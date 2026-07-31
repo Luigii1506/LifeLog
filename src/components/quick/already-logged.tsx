@@ -18,14 +18,17 @@ export function AlreadyLogged({
   icon,
   label,
   summary,
+  detail,
   loggedAt,
   eventId,
   onEdit,
 }: {
   icon: string;
   label: string;
-  /** El dato: «07:30», «78 kg», «7h 30m». */
+  /** El dato, corto: «07:30», «78 kg», «7h 30m». */
   summary: string;
+  /** Matiz, en pequeño: «desde las 23:00». */
+  detail?: string;
   /** Cuándo se pulsó el botón. */
   loggedAt: string;
   eventId: string;
@@ -38,11 +41,31 @@ export function AlreadyLogged({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-done bg-done-surface p-8 text-center">
-        <div className="text-5xl">{icon}</div>
-        <p className="mt-3 text-sm text-muted">{label}</p>
-        <p className="mt-1 font-mono text-4xl leading-none tabular-nums">{summary}</p>
-        <p className="mt-3 text-xs text-muted">Registrado a las {loggedAt}</p>
+      {/* El dato manda: grande y solo. El resto son notas al pie, en el orden
+          en que se preguntan — qué es, cuánto, el matiz, y cuándo se guardó.
+          Antes iba todo en la línea grande y en un móvil se partía en dos. */}
+      <div className="rounded-2xl border border-done bg-done-surface px-5 py-7 text-center">
+        <div className="text-4xl">{icon}</div>
+
+        <p className="mt-3 text-[11px] font-medium tracking-[0.14em] text-muted uppercase">
+          {label}
+        </p>
+
+        <p className="mt-2 font-mono text-[2.25rem] leading-none tabular-nums">
+          {summary}
+        </p>
+
+        {detail && <p className="mt-2 text-sm text-muted">{detail}</p>}
+
+        <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-muted">
+          <span
+            aria-hidden
+            className="inline-flex size-4 items-center justify-center rounded-full bg-done text-[9px] font-bold text-white"
+          >
+            ✓
+          </span>
+          Guardado a las {loggedAt}
+        </p>
       </div>
 
       {confirmando ? (

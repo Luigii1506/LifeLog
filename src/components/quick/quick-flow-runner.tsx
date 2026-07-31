@@ -38,7 +38,12 @@ export function QuickFlowRunner({
   done: string;
   steps: FlowStep[];
   /** Lo ya registrado hoy. Si existe, se enseña en vez de preguntar. */
-  existing?: { eventId: string; summary: string; loggedAt: string } | null;
+  existing?: {
+    eventId: string;
+    summary: string;
+    detail?: string;
+    loggedAt: string;
+  } | null;
 }) {
   const [indice, setIndice] = useState(0);
   const [respuestas, setRespuestas] = useState<Record<string, string | number>>({});
@@ -120,6 +125,7 @@ export function QuickFlowRunner({
         icon={icon}
         label={label}
         summary={existing.summary}
+        detail={existing.detail}
         loggedAt={existing.loggedAt}
         eventId={existing.eventId}
         onEdit={() => {

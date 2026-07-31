@@ -33,13 +33,23 @@ const KIND_DE: Record<string, string> = {
  * Los demás se repiten por naturaleza —tomas tres medicamentos, haces dos
  * bloques de trabajo, apuntas varias notas— y ahí «ya lo hiciste» no significa
  * nada: se apila, no se corrige.
+ *
+ * El ánimo está aquí porque en la práctica se registra una vez y se corrige, no
+ * se acumula: si por la tarde estás peor, lo cambias.
  */
-const UNA_VEZ = new Set<QuickFlowId>(["wake", "sleep", "weight"]);
+const UNA_VEZ = new Set<QuickFlowId>(["wake", "sleep", "weight", "mood"]);
 
 export type TodayEntry = {
   eventId: string;
-  /** Lo registrado, en una línea: «07:30», «78 kg», «7h 30m». */
+  /**
+   * El dato, corto: «07:30», «78 kg», «7h 30m».
+   *
+   * Corto de verdad. Va en grande, y en un móvil una cifra larga rompe la
+   * línea y deja la tarjeta torcida. Lo que no cabe va en `detail`.
+   */
   summary: string;
+  /** Matiz, en pequeño: «desde las 23:00», «Bien». */
+  detail?: string;
   /** Cuándo se pulsó el botón, HH:MM en la zona del evento. */
   loggedAt: string;
   payload: Record<string, unknown>;
@@ -83,9 +93,17 @@ export async function todayEntry(
     /* un payload ilegible no debe romper la pantalla */
   }
 
+  const { summary, detail } = describir(
+    kind,
+    payload,
+    vigente.startedAt,
+    vigente.timezone,
+  );
+
   return {
     eventId: vigente.id,
-    summary: describir(kind, payload, vigente.startedAt, vigente.timezone),
+    summary,
+    detail,
     loggedAt: hora(vigente.createdAt, vigente.timezone),
     payload,
   };
@@ -101,33 +119,61 @@ function hora(fecha: Date, timeZone: string): string {
 }
 
 /**
- * Lo registrado en una línea.
+ * Lo registrado, partido en dato y matiz.
  *
- * Cada flujo enseña SU dato, no un texto genérico: en «Desperté» lo que
- * importa es la hora que elegiste, no que exista un evento.
+ * Cada flujo enseña SU dato, no un texto genérico: en «Desperté» lo que importa
+ * es la hora que elegiste, no que exista un evento. El matiz va aparte porque
+ * el dato se pinta en grande, y meter «7h 30m · desde las 23:00» en una sola
+ * línea grande la parte en dos y deja la tarjeta torcida.
  */
 function describir(
   kind: string,
   p: Record<string, unknown>,
   startedAt: Date,
   timeZone: string,
-): string {
+): { summary: string; detail?: string } {
   switch (kind) {
     case "wake.up":
       // La hora de despertar es `startedAt`, no un campo: el selector de hora
       // fija cuándo OCURRIÓ, que es justo el dato.
-      return hora(startedAt, timeZone);
+      return { summary: hora(startedAt, timeZone) };
+
     case "sleep.logged": {
       const h = Number(p.hours);
-      if (!Number.isFinite(h)) return "registrado";
+      if (!Number.isFinite(h)) return { summary: "—" };
       const horas = Math.floor(h);
       const min = Math.round((h - horas) * 60);
-      const dormido = min > 0 ? `${horas}h ${min}m` : `${horas}h`;
-      return p.bedtime ? `${dormido} · desde las ${p.bedtime}` : dormido;
+      return {
+        summary: min > 0 ? `${horas}h ${min}m` : `${horas}h`,
+        detail: p.bedtime ? `desde las ${p.bedtime}` : undefined,
+      };
     }
+
     case "weight.logged":
-      return p.kg !== undefined ? `${p.kg} kg` : "registrado";
+      return p.kg !== undefined ? { summary: `${p.kg} kg` } : { summary: "—" };
+
+    case "mood.logged": {
+      const score = Number(p.score);
+      // La cara dice más que el número, y el número lo confirma.
+      const cara = CARA_DE.find(([tope]) => score <= tope)?.[1] ?? "";
+      return {
+        summary: Number.isFinite(score) ? `${cara} ${score}/10`.trim() : "—",
+        detail: typeof p.label === "string" ? p.label : undefined,
+      };
+    }
+
     default:
-      return isEventKind(kind) ? EVENT_KINDS[kind].label : "registrado";
+      return {
+        summary: isEventKind(kind) ? EVENT_KINDS[kind].label : "registrado",
+      };
   }
 }
+
+/** La misma escala de caras que usa el flujo al preguntar. */
+const CARA_DE: [tope: number, cara: string][] = [
+  [2, "😖"],
+  [4, "😕"],
+  [6, "😐"],
+  [8, "🙂"],
+  [10, "🤩"],
+];
