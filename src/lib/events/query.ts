@@ -42,24 +42,49 @@ export type TimelineEntry = {
  * posterior no aparece, pero sigue en la base.
  */
 /**
- * Los ids anulados de entre los que se le pasen (I-02).
+ * Marca de RETIRADA: el evento no corrige nada, borra.
  *
- * La corrección puede llegar CUALQUIER DÍA: te das cuenta mañana de que ayer
- * registraste mal. Por eso se pregunta a la base en vez de buscar la anulación
- * dentro de la misma ventana — así no reaparece un evento corregido tarde.
+ * Corregir y retirar se parecen —los dos anulan al anterior— pero terminan
+ * distinto: la corrección deja un dato nuevo a la vista, la retirada no debe
+ * dejar nada.
  *
- * Vive aquí y no en cada consulta para que la línea de tiempo y el estado de
- * las tarjetas no puedan discrepar sobre qué cuenta como registrado.
+ * Y con solo `revokesId` eso no se puede expresar. B anula a A, pero entonces B
+ * queda visible; C anula a B y queda C. La cadena nunca termina: siempre sobra
+ * uno. Por eso hace falta una marca explícita, y va en `source` porque es el
+ * único campo libre que ya existe — la tabla es append-only y no admite un
+ * estado que se actualice después.
+ */
+export const SUFIJO_RETIRADO = ":retirado";
+
+/**
+ * Los ids que NO deben verse, de entre los que se le pasen (I-02).
+ *
+ * Se ocultan dos cosas: lo anulado por una corrección posterior, y las propias
+ * retiradas. La corrección puede llegar CUALQUIER DÍA —te das cuenta mañana de
+ * que ayer registraste mal— así que se pregunta a la base en vez de buscar la
+ * anulación dentro de la misma ventana.
+ *
+ * Vive aquí y no en cada consulta para que la línea de tiempo, las tarjetas y
+ * los totales no puedan discrepar sobre qué cuenta como registrado.
  */
 export async function revokedAmong(ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const anulaciones = await db.event.findMany({
-    where: { revokesId: { in: ids } },
-    select: { revokesId: true },
-  });
-  return new Set(
-    anulaciones.map((a) => a.revokesId).filter((id): id is string => id !== null),
-  );
+
+  const [anulaciones, retiradas] = await Promise.all([
+    db.event.findMany({
+      where: { revokesId: { in: ids } },
+      select: { revokesId: true },
+    }),
+    db.event.findMany({
+      where: { id: { in: ids }, source: { endsWith: SUFIJO_RETIRADO } },
+      select: { id: true },
+    }),
+  ]);
+
+  const ocultos = new Set<string>();
+  for (const a of anulaciones) if (a.revokesId) ocultos.add(a.revokesId);
+  for (const r of retiradas) ocultos.add(r.id);
+  return ocultos;
 }
 
 export async function timelineForDay(

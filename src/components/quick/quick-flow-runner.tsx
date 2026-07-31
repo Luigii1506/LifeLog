@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { logQuickFlow } from "@/app/actions";
 import { clearDraft, readDraft, writeDraft } from "@/lib/quick/draft";
+import { AlreadyLogged } from "./already-logged";
 import {
   GuidedFlow,
   type FlowAnswer,
@@ -26,13 +27,18 @@ import {
 export function QuickFlowRunner({
   flowId,
   icon,
+  label,
   done,
   steps,
+  existing,
 }: {
   flowId: string;
   icon: string;
+  label: string;
   done: string;
   steps: FlowStep[];
+  /** Lo ya registrado hoy. Si existe, se enseña en vez de preguntar. */
+  existing?: { eventId: string; summary: string; loggedAt: string } | null;
 }) {
   const [indice, setIndice] = useState(0);
   const [respuestas, setRespuestas] = useState<Record<string, string | number>>({});
@@ -41,6 +47,14 @@ export function QuickFlowRunner({
   const [listo, setListo] = useState(false);
   /** Se retoma un borrador: se avisa una vez y se calla. */
   const [retomado, setRetomado] = useState(false);
+  /**
+   * Se está corrigiendo lo de hoy.
+   *
+   * Guardar entonces ANULA el registro anterior en vez de apilar otro (I-02).
+   * Para quien usa la app es una edición; el log conserva ambos por si la
+   * corrección se comiera el dato.
+   */
+  const [corrigiendo, setCorrigiendo] = useState(false);
 
   // El borrador se lee tras montar, nunca durante el render: el servidor no
   // puede ver localStorage y la diferencia rompería la hidratación.
@@ -61,7 +75,12 @@ export function QuickFlowRunner({
       // La zona la sabe el NAVEGADOR. El servidor corre en UTC y usar la
       // suya desplazaba cada evento siete horas.
       const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const r = await logQuickFlow(flowId, finales, zona);
+      const r = await logQuickFlow(
+        flowId,
+        finales,
+        zona,
+        corrigiendo ? (existing?.eventId ?? null) : null,
+      );
       if (!r.ok) setError(r.error);
       else {
         // El borrador muere con el evento: si sobreviviera, la tarjeta diría
@@ -92,6 +111,25 @@ export function QuickFlowRunner({
     } else {
       guardar(siguientes);
     }
+  }
+
+  // Ya registrado hoy y sin intención de cambiarlo: se enseña, no se pregunta.
+  if (existing && !corrigiendo && !listo) {
+    return (
+      <AlreadyLogged
+        icon={icon}
+        label={label}
+        summary={existing.summary}
+        loggedAt={existing.loggedAt}
+        eventId={existing.eventId}
+        onEdit={() => {
+          clearDraft(flowId);
+          setIndice(0);
+          setRespuestas({});
+          setCorrigiendo(true);
+        }}
+      />
+    );
   }
 
   if (listo) {

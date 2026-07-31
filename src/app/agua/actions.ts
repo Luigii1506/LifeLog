@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { emit, revoke } from "@/lib/events/emit";
+import { SUFIJO_RETIRADO } from "@/lib/events/query";
 
 export type WaterResult = { ok: true } | { ok: false; error: string };
 
@@ -38,8 +39,10 @@ export async function logWater(
  * toca diez veces al día, el toque de más es cuestión de tiempo — y sin poder
  * deshacerlo el total deja de ser fiable y se abandona la cuenta.
  *
- * El anulador lleva `ml: 0` —«no bebí nada»— así que al sumarlo el total no
- * cambia. Con cualquier otro valor, deshacer añadiría agua que no bebiste.
+ * El anulador va marcado como RETIRADA, así que no se ve ni se suma: anular
+ * esconde al anulado, no al anulador, y sin la marca el propio evento de
+ * deshacer aparecería en la lista. Lleva `ml: 0` de todos modos, por si algún
+ * recuento futuro se olvida de filtrar.
  */
 export async function undoWater(eventId: string): Promise<WaterResult> {
   try {
@@ -54,7 +57,7 @@ export async function undoWater(eventId: string): Promise<WaterResult> {
       kind: "water.logged",
       payload: { ml: 0 },
       timezone: objetivo.timezone,
-      source: "app:agua:deshacer",
+      source: `app:agua${SUFIJO_RETIRADO}`,
     });
   } catch (error) {
     console.error("deshacer agua falló", error);

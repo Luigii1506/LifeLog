@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { emit, EventValidationError } from "@/lib/events/emit";
+import { emit, EventValidationError, revoke } from "@/lib/events/emit";
+import { db } from "@/lib/db";
+import { SUFIJO_RETIRADO } from "@/lib/events/query";
 import { isEventKind, type EventKind } from "@/lib/events/kinds";
 import { timeOfDayToDate } from "@/lib/time-of-day";
 
@@ -29,7 +31,14 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export async function logEvent(
   kind: string,
   payload: unknown,
-  options?: { entityId?: string; startedAt?: string; source?: string; timeZone?: string },
+  options?: {
+    entityId?: string;
+    startedAt?: string;
+    source?: string;
+    timeZone?: string;
+    /** Anula un evento anterior: corregir, no apilar (I-02). */
+    revokesId?: string | null;
+  },
 ): Promise<ActionResult> {
   if (!isEventKind(kind)) {
     return { ok: false, error: `Tipo de evento desconocido: ${kind}` };
@@ -44,6 +53,7 @@ export async function logEvent(
         ? new Date(options.startedAt)
         : undefined,
       timezone: options?.timeZone,
+      revokesId: options?.revokesId ?? null,
       source: options?.source ?? "app:today",
     });
   } catch (error) {
@@ -85,18 +95,28 @@ export async function logOneTap(kind: string): Promise<ActionResult> {
  * misma especificación que generó los pasos. Así el cliente no puede inventar
  * campos ni saltarse la forma del evento.
  */
+/**
+ * Registra un flujo rápido, o CORRIGE el de hoy si se pasa `replacesId`.
+ *
+ * Corregir no apila un segundo registro: emite uno que anula al anterior
+ * (I-02). El log conserva ambos —si una corrección se comiera un dato, se
+ * recupera— pero todas las consultas filtran los anulados, así que para quien
+ * usa la app es una edición y punto.
+ */
 export async function logQuickFlow(
   flowId: string,
   answers: Record<string, string | number>,
   timeZone: string,
+  replacesId?: string | null,
 ): Promise<ActionResult> {
   const { buildQuickFlow } = await import("@/lib/quick/flows");
   const spec = await buildQuickFlow(flowId as never);
   if (!spec) return { ok: false, error: `Flujo desconocido: ${flowId}` };
 
   return logEvent(spec.kind, spec.build(answers), {
-    source: "app:guiado",
+    source: replacesId ? "app:guiado:correccion" : "app:guiado",
     timeZone,
+    revokesId: replacesId ?? null,
     startedAt: spec.startedAtFrom
       ? timeOfDayToDate(
           String(answers[spec.startedAtFrom] ?? ""),
@@ -104,5 +124,43 @@ export async function logQuickFlow(
         )?.toISOString()
       : undefined,
   });
+}
+
+/**
+ * Quita un registro del día.
+ *
+ * No lo borra: emite un evento que lo anula, con el mismo tipo y un payload
+ * vacío marcado. La base rechaza el DELETE —un trigger hace cumplir I-02— y
+ * eso es deliberado: lo que se quita por error se puede recuperar.
+ */
+export async function deleteQuickEntry(eventId: string): Promise<ActionResult> {
+  try {
+    const objetivo = await db.event.findUnique({
+      where: { id: eventId },
+      select: { kind: true, timezone: true, payloadJson: true },
+    });
+    if (!objetivo) return { ok: false, error: "Ese registro ya no existe" };
+    if (!isEventKind(objetivo.kind)) {
+      return { ok: false, error: "Tipo de evento desconocido" };
+    }
+
+    // El anulador repite el payload del original: tiene que pasar el mismo
+    // esquema, y no hay un «payload vacío» válido para todos los tipos.
+    //
+    // Lo que lo convierte en RETIRADA y no en corrección es el sufijo de
+    // `source`: sin él quedaría visible en lugar del original, porque anular
+    // esconde al anulado, no al anulador.
+    await revoke(eventId, {
+      kind: objetivo.kind,
+      payload: JSON.parse(objetivo.payloadJson),
+      timezone: objetivo.timezone,
+      source: `app:guiado${SUFIJO_RETIRADO}`,
+    });
+  } catch (error) {
+    console.error("retirar registro falló", error);
+    return { ok: false, error: "No se pudo quitar" };
+  }
+  revalidatePath("/");
+  return { ok: true };
 }
 
