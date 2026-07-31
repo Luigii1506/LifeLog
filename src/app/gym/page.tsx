@@ -7,6 +7,17 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Gimnasio.
+ *
+ * La sesión NO existe hasta la primera serie. Elegir grupo y mirar ejercicios
+ * no abre nada: antes sí, y eso convertía «a ver qué hay de pecho» en un
+ * entrenamiento empezado —cronómetro corriendo, sesión bloqueando otra, y
+ * sesiones guardadas sin una sola serie.
+ *
+ * Por eso la pantalla se decide por los PARÁMETROS de la URL antes que por la
+ * sesión: `?grupo=pecho` enseña los ejercicios de pecho haya sesión o no.
+ */
 export default async function GymPage({
   searchParams,
 }: {
@@ -15,7 +26,24 @@ export default async function GymPage({
   const { grupo, ejercicio } = await searchParams;
   const sesion = await getOpenSession();
 
-  if (!sesion) {
+  const enCurso = ejercicio
+    ? await db.exercise.findUnique({ where: { id: ejercicio } })
+    : null;
+
+  // El grupo se queda pegado: sin parámetro en la URL se toma el del último
+  // ejercicio de la sesión. Acabar pecho y volver a elegir grupo desde cero
+  // sería pedirle al usuario que repita algo que el sistema ya sabe.
+  //
+  // `?grupo=` vacío es distinto de ausente: es la forma de PEDIR el selector.
+  // Sin esa distinción, «Cambiar grupo» rebotaría al mismo grupo para siempre.
+  const grupoActivo =
+    grupo !== undefined
+      ? grupo || null
+      : (enCurso?.muscleGroup ?? (sesion ? await stickyGroup(sesion.id) : null));
+
+  // Sin grupo ni ejercicio elegidos no hay nada que enseñar salvo por dónde
+  // empezar. Da igual que haya sesión: si la hay, la píldora de arriba lo dice.
+  if (!grupoActivo && !enCurso) {
     const [rutinas, grupos] = await Promise.all([getRoutines(), musclegroupSummary()]);
     return (
       <Shell>
@@ -33,25 +61,10 @@ export default async function GymPage({
     );
   }
 
-  const enCurso = ejercicio
-    ? await db.exercise.findUnique({ where: { id: ejercicio } })
-    : null;
-
-  // El grupo se queda pegado: sin parámetro en la URL se toma el del último
-  // ejercicio de la sesión. Acabar pecho y volver a elegir grupo desde cero
-  // sería pedirle al usuario que repita algo que el sistema ya sabe.
-  //
-  // `?grupo=` vacío es distinto de ausente: es la forma de PEDIR el selector.
-  // Sin esa distinción, «Cambiar grupo» rebotaría al mismo grupo para siempre.
-  const grupoActivo =
-    grupo !== undefined
-      ? grupo || null
-      : (enCurso?.muscleGroup ?? (await stickyGroup(sesion.id)));
-
   const [grupos, ejerciciosDelGrupo] = await Promise.all([
     musclegroupSummary(),
     grupoActivo
-      ? exercisesInGroup(grupoActivo, { excludeSessionId: sesion.id })
+      ? exercisesInGroup(grupoActivo, { excludeSessionId: sesion?.id })
       : Promise.resolve([]),
   ]);
 
@@ -63,8 +76,10 @@ export default async function GymPage({
     ...(enCurso ? [enCurso.id] : []),
   ]);
 
+  const series = sesion?.sets ?? [];
+
   const seriesDeEsteEjercicio = enCurso
-    ? sesion.sets
+    ? series
         .filter((s) => s.exerciseId === enCurso.id)
         .sort((a, b) => a.setIndex - b.setIndex)
         .map((s) => ({
@@ -81,18 +96,18 @@ export default async function GymPage({
   const nombres = new Map(
     (
       await db.exercise.findMany({
-        where: { id: { in: [...new Set(sesion.sets.map((s) => s.exerciseId))] } },
+        where: { id: { in: [...new Set(series.map((s) => s.exerciseId))] } },
         select: { id: true, name: true },
       })
     ).map((e) => [e.id, e.name]),
   );
   const trabajados: string[] = [];
-  for (const s of sesion.sets) {
+  for (const s of series) {
     const nombre = nombres.get(s.exerciseId);
     if (nombre && !trabajados.includes(nombre)) trabajados.push(nombre);
   }
 
-  const trabajo = sesion.sets.filter((s) => s.setType !== "warmup");
+  const trabajo = series.filter((s) => s.setType !== "warmup");
   const totals = {
     setCount: trabajo.length,
     volumeKg: trabajo.reduce((sum, s) => sum + (s.reps ?? 0) * (s.weightKg ?? 0), 0),
@@ -113,7 +128,6 @@ export default async function GymPage({
   return (
     <Shell>
       <GuidedWorkout
-        sessionId={sesion.id}
         groups={grupos}
         initialGroup={grupoActivo}
         exercises={ejerciciosDelGrupo.map((e) => ({
@@ -127,11 +141,15 @@ export default async function GymPage({
         currentExercise={tarjetaEnCurso}
         sets={seriesDeEsteEjercicio}
         totals={totals}
-        startedAt={sesion.startedAt.toISOString()}
-        initialMinutes={Math.max(
-          0,
-          Math.floor((Date.now() - sesion.startedAt.getTime()) / 60000),
-        )}
+        // Nulos mientras no haya sesión: la píldora de «en curso» y el botón de
+        // terminar solo tienen sentido cuando hay algo que terminar.
+        sessionId={sesion?.id ?? null}
+        startedAt={sesion?.startedAt.toISOString() ?? null}
+        initialMinutes={
+          sesion
+            ? Math.max(0, Math.floor((Date.now() - sesion.startedAt.getTime()) / 60000))
+            : 0
+        }
         workedExercises={trabajados}
       />
     </Shell>
@@ -139,9 +157,5 @@ export default async function GymPage({
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="py-4">
-      {children}
-    </main>
-  );
+  return <main className="py-4">{children}</main>;
 }

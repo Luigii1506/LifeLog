@@ -304,3 +304,37 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("editar y borrar series", () => {
       .rejects.toThrow(/cerrada/);
   });
 });
+
+// ── Cuándo empieza la sesión ────────────────────────────────────────────
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("la sesión nace con la primera serie", () => {
+  it("mirar ejercicios no abre nada", async () => {
+    // Antes, tocar un grupo muscular abría la sesión. Eso convertía «a ver qué
+    // hay de pecho» en un entrenamiento empezado: cronómetro corriendo, sesión
+    // bloqueando otra, y sesiones guardadas sin una sola serie. De tres
+    // sesiones reales, una estaba así.
+    expect(await queries.getOpenSession()).toBeNull();
+  });
+
+  it("la primera serie abre la sesión", async () => {
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 10, weightKg: 40 });
+
+    const abierta = await queries.getOpenSession();
+    expect(abierta!.id).toBe(s.id);
+    expect(abierta!.sets).toHaveLength(1);
+    await gym.closeSession(s.id);
+  });
+
+  it("una segunda serie no abre una sesión nueva", async () => {
+    // `addSet` reutiliza la abierta. Sin eso, cada serie sería un
+    // entrenamiento de una serie.
+    const s = await gym.startSession({ timeZone: "America/Tijuana" });
+    await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 10 });
+    await gym.logSet({ sessionId: s.id, exerciseId: pressMilitarId, reps: 8 });
+
+    expect(await db.workoutSession.count({ where: { status: "open" } })).toBe(1);
+    expect((await queries.getOpenSession())!.sets).toHaveLength(2);
+    await gym.closeSession(s.id);
+  });
+});

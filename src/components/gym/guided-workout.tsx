@@ -62,7 +62,8 @@ export function GuidedWorkout({
   initialMinutes,
   workedExercises,
 }: {
-  sessionId: string;
+  /** Nulo hasta la primera serie: la sesión no existe antes. */
+  sessionId: string | null;
   groups: GroupCard[];
   initialGroup: string | null;
   /** Ejercicios del grupo seleccionado, ya calculados en el servidor. */
@@ -70,8 +71,8 @@ export function GuidedWorkout({
   currentExercise: ExerciseCard | null;
   sets: SetRow[];
   totals: { setCount: number; volumeKg: number };
-  /** ISO. La barra sigue contando en el cliente. */
-  startedAt: string;
+  /** ISO. La barra sigue contando en el cliente. Nulo sin sesión. */
+  startedAt: string | null;
   /** Minutos ya transcurridos, calculados en el servidor. Evita el parpadeo. */
   initialMinutes: number;
   /** Ejercicios trabajados, para el resumen antes de cerrar. */
@@ -94,12 +95,14 @@ export function GuidedWorkout({
 
   // Cerrar la sesión es lo mismo desde cualquier pantalla, así que vive aquí y
   // no repetido en cada rama.
-  const terminar = () =>
+  const terminar = () => {
+    if (!sessionId) return;
     startTransition(async () => {
       const r = await finishWorkout(sessionId, null);
       if (r.ok) setPrs(r.prs ?? []);
       else setError(r.error);
     });
+  };
 
   const marco = {
     totals,
@@ -116,14 +119,26 @@ export function GuidedWorkout({
     return (
       <Marco {...marco}>
         <SetLogger
-          sessionId={sessionId}
           exercise={currentExercise}
           sets={sets}
           pending={pending}
-          onAdd={(d) => run(() => addSet({ sessionId, exerciseId: currentExercise.id, ...d }))}
+          onAdd={(d) =>
+            run(() =>
+              // La sesión se abre aquí si no existía: la primera serie ES el
+              // comienzo del entrenamiento.
+              addSet({
+                exerciseId: currentExercise.id,
+                ...d,
+                timeZone:
+                  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+              }),
+            )
+          }
           onEdit={(id, d) => run(() => editSet(id, d))}
           onRemove={(id) => run(() => removeSet(id))}
-          onNext={() => router.push(`/gym?grupo=${encodeURIComponent(initialGroup ?? "")}`)}
+          onNext={() =>
+            router.push(`/gym?grupo=${encodeURIComponent(initialGroup ?? "")}`)
+          }
         />
       </Marco>
     );
@@ -165,10 +180,14 @@ export function GuidedWorkout({
           <button
             key={g.group}
             disabled={pending}
-            onClick={() => router.push(`/gym?grupo=${encodeURIComponent(g.group)}`)}
+            onClick={() =>
+              router.push(`/gym?grupo=${encodeURIComponent(g.group)}`)
+            }
             className="relative overflow-hidden rounded-2xl border border-line bg-surface p-4 text-left transition active:scale-[0.97] disabled:opacity-50"
           >
-            <span className="block text-lg font-medium capitalize">{g.group}</span>
+            <span className="block text-lg font-medium capitalize">
+              {g.group}
+            </span>
             <span className="mt-0.5 block text-xs text-muted">
               {g.exerciseCount} ejercicios
               {g.timesTrained > 0 && ` · ${g.timesTrained} series`}
@@ -221,7 +240,7 @@ function Marco({
 }: {
   children: React.ReactNode;
   totals: { setCount: number; volumeKg: number };
-  startedAt: string;
+  startedAt: string | null;
   initialMinutes: number;
   workedExercises: string[];
   error: string | null;
@@ -233,20 +252,26 @@ function Marco({
       {children}
 
       {error && (
-        <p role="status" className="rounded-lg bg-accent px-4 py-3 text-center font-medium text-white">
+        <p
+          role="status"
+          className="rounded-lg bg-accent px-4 py-3 text-center font-medium text-white"
+        >
           {error}
         </p>
       )}
 
-      <SessionBar
-        startedAt={startedAt}
-        initialMinutes={initialMinutes}
-        setCount={totals.setCount}
-        volumeKg={totals.volumeKg}
-        exercises={workedExercises}
-        pending={pending}
-        onFinish={onFinish}
-      />
+      {/* Sin sesión no hay nada que terminar ni cronómetro que enseñar. */}
+      {startedAt && (
+        <SessionBar
+          startedAt={startedAt}
+          initialMinutes={initialMinutes}
+          setCount={totals.setCount}
+          volumeKg={totals.volumeKg}
+          exercises={workedExercises}
+          pending={pending}
+          onFinish={onFinish}
+        />
+      )}
     </div>
   );
 }
@@ -290,12 +315,16 @@ function ExercisePicker({
   const visibles = exercises.filter((e) =>
     normaliza(e.name).includes(normaliza(filtro.trim())),
   );
-  const exacto = exercises.some((e) => normaliza(e.name) === normaliza(filtro.trim()));
+  const exacto = exercises.some(
+    (e) => normaliza(e.name) === normaliza(filtro.trim()),
+  );
 
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-2xl font-semibold tracking-tight capitalize">{group}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight capitalize">
+          {group}
+        </h2>
         <button
           onClick={onBack}
           className="rounded-full border border-line px-3 py-1 text-xs text-muted transition active:scale-95"
@@ -356,11 +385,14 @@ function SetLogger({
   onRemove,
   onNext,
 }: {
-  sessionId: string;
   exercise: ExerciseCard;
   sets: SetRow[];
   pending: boolean;
-  onAdd: (d: { weightKg: number | null; reps: number | null; rir: number | null }) => void;
+  onAdd: (d: {
+    weightKg: number | null;
+    reps: number | null;
+    rir: number | null;
+  }) => void;
   onEdit: (
     id: string,
     d: { weightKg: number | null; reps: number | null; rir: number | null },
@@ -426,14 +458,19 @@ function SetLogger({
    * serie sin repeticiones no es una serie.
    */
   useVoiceTarget(
-    editando ? `Corrigiendo serie ${editando.setIndex}` : "Di la serie · «setenta por diez»",
+    editando
+      ? `Corrigiendo serie ${editando.setIndex}`
+      : "Di la serie · «setenta por diez»",
     (texto) => {
       // Primero la serie, después los comandos. Al revés, «ok setenta por
       // diez» casaba con «aceptar» —por el «ok»— y registraba los valores
       // anteriores en vez de los dictados. Una orden nunca lleva números y una
       // serie siempre, así que el número desempata sin ambigüedad.
       const serie = parseSpokenSet(texto);
-      if (serie && (serie.weightKg !== null || serie.reps !== null || serie.rir !== null)) {
+      if (
+        serie &&
+        (serie.weightKg !== null || serie.reps !== null || serie.rir !== null)
+      ) {
         if (serie.weightKg !== null) setPeso(String(serie.weightKg));
         if (serie.reps !== null) setReps(String(serie.reps));
         if (serie.rir !== null) setRir(String(serie.rir));
@@ -507,7 +544,9 @@ function SetLogger({
             {exercise.name}
           </h2>
           {exercise.lastSets ? (
-            <p className="mt-0.5 font-mono text-sm text-muted">{exercise.lastSets}</p>
+            <p className="mt-0.5 font-mono text-sm text-muted">
+              {exercise.lastSets}
+            </p>
           ) : (
             <p className="mt-0.5 text-sm text-muted">Primera vez</p>
           )}
@@ -543,7 +582,9 @@ function SetLogger({
                   <span className="tabular-nums">
                     {s.weightKg ?? "—"} kg × {s.reps ?? "—"}
                   </span>
-                  {s.rir !== null && <span className="text-muted">RIR {s.rir}</span>}
+                  {s.rir !== null && (
+                    <span className="text-muted">RIR {s.rir}</span>
+                  )}
                 </button>
                 <button
                   onClick={() => {
@@ -564,7 +605,9 @@ function SetLogger({
 
       {editando && (
         <div className="flex items-center justify-between rounded-xl border border-accent bg-accent/10 px-4 py-2 text-sm">
-          <span className="font-medium">Corrigiendo la serie {editando.setIndex}</span>
+          <span className="font-medium">
+            Corrigiendo la serie {editando.setIndex}
+          </span>
           <button onClick={cancelar} className="text-muted underline">
             Cancelar
           </button>
@@ -643,7 +686,8 @@ function Resumen({
       <div className="text-5xl">🏋️</div>
       <h2 className="text-lg font-medium">Entrenamiento cerrado</h2>
       <p className="text-sm text-muted">
-        {totals.setCount} series · {Math.round(totals.volumeKg).toLocaleString("es-MX")} kg
+        {totals.setCount} series ·{" "}
+        {Math.round(totals.volumeKg).toLocaleString("es-MX")} kg
       </p>
       {prs.length > 0 && (
         <div>

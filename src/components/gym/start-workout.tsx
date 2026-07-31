@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { openWorkout } from "@/app/gym/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
 
@@ -39,13 +38,15 @@ export function StartWorkout({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function empezar(group: string | null, routineId?: string) {
-    startTransition(async () => {
-      // La zona la sabe el navegador. En el servidor es UTC, y una sesión
-      // con la zona equivocada cae en el día que no es.
-      const zona = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const r = await openWorkout(routineId ?? null, zona);
-      if (!r.ok) return setError(r.error);
+  /**
+   * Elegir grupo solo NAVEGA. No abre sesión.
+   *
+   * La sesión nace con la primera serie. Antes nacía aquí, y eso convertía
+   * «mirar qué ejercicios hay de pecho» en un entrenamiento empezado: el
+   * cronómetro corría y quedaban sesiones sin una sola serie.
+   */
+  function empezar(group: string | null) {
+    startTransition(() => {
       router.push(`/gym?grupo=${encodeURIComponent(group ?? "")}`);
     });
   }
@@ -92,7 +93,7 @@ export function StartWorkout({
             <button
               key={rutina.id}
               disabled={pending}
-              onClick={() => empezar(rutina.firstGroup, rutina.id)}
+              onClick={() => empezar(rutina.firstGroup)}
               className="w-full rounded-xl border border-line bg-surface p-4 text-left transition active:scale-[0.99] disabled:opacity-50"
             >
               <span className="font-medium">{rutina.name}</span>

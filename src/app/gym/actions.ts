@@ -21,33 +21,45 @@ function fail(error: unknown): GymResult {
   return { ok: false, error: "No se pudo completar la operación" };
 }
 
-export async function startWorkout(
-  routineId: string | null,
-  timeZone: string,
-): Promise<GymResult> {
-  try {
-    await startSession({ routineId, timeZone });
-  } catch (error) {
-    return fail(error);
-  }
-  revalidatePath("/gym");
-  return { ok: true };
-}
-
+/**
+ * Registra una serie, abriendo la sesión si aún no existe.
+ *
+ * La sesión nace AQUÍ, con la primera serie. Antes nacía al tocar el grupo
+ * muscular, y eso convertía «mirar qué ejercicios hay de pecho» en un
+ * entrenamiento empezado: el cronómetro corría, la sesión bloqueaba abrir otra,
+ * y quedaban sesiones guardadas sin una sola serie.
+ *
+ * Elegir grupo es mirar. Entrenar es levantar algo.
+ */
 export async function addSet(input: {
-  sessionId: string;
   exerciseId: string;
   weightKg: number | null;
   reps: number | null;
   rir: number | null;
   setType?: string;
+  timeZone: string;
 }): Promise<GymResult> {
   try {
-    await logSet(input);
+    const abierta = await db.workoutSession.findFirst({
+      where: { status: "open" },
+      select: { id: true },
+    });
+    const sessionId =
+      abierta?.id ?? (await startSession({ timeZone: input.timeZone })).id;
+
+    await logSet({
+      sessionId,
+      exerciseId: input.exerciseId,
+      weightKg: input.weightKg,
+      reps: input.reps,
+      rir: input.rir,
+      setType: input.setType,
+    });
   } catch (error) {
     return fail(error);
   }
   revalidatePath("/gym");
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -118,28 +130,4 @@ export async function createExercise(
   } catch (error) {
     return fail(error);
   }
-}
-
-/**
- * Abre la sesión de entrenamiento.
- *
- * No hay un paso previo de «empezar entrenamiento»: llegas al gimnasio, el
- * coach dice pecho, tocas pecho. Elegir qué vas a trabajar ES empezar, y
- * separarlo en dos pantallas era un toque de más por pura ceremonia.
- *
- * Si ya hay una sesión abierta no crea otra: entrar dos veces desde el home
- * no debe duplicar el entrenamiento.
- */
-export async function openWorkout(
-  routineId: string | null,
-  timeZone: string,
-): Promise<GymResult> {
-  try {
-    const abierta = await db.workoutSession.findFirst({ where: { status: "open" } });
-    if (!abierta) await startSession({ routineId: routineId ?? null, timeZone });
-  } catch (error) {
-    return fail(error);
-  }
-  revalidatePath("/gym");
-  return { ok: true };
 }
