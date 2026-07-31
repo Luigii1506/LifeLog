@@ -6,6 +6,7 @@ import { logSupplement, undoSupplement } from "@/app/suplementos/actions";
 import { useVoiceTarget } from "@/components/voice/registry";
 import { matchOption } from "@/lib/match-option";
 import { formatoDosis, type Dosing } from "@/lib/supplements/catalog";
+import { SupplementDetail } from "./supplement-detail";
 
 /**
  * Suplementos del día.
@@ -36,14 +37,14 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  /** Tarjeta abierta para elegir cantidad. */
-  const [dosificando, setDosificando] = useState<Tarjeta | null>(null);
+  /** Tarjeta abierta en detalle. */
+  const [abierta, setAbierta] = useState<string | null>(null);
   /** Lo último registrado, para acusar recibo del toque. */
   const [acuse, setAcuse] = useState<string | null>(null);
 
   function registrar(t: Tarjeta, dose: number | null) {
     setError(null);
-    setDosificando(null);
+    setAbierta(null);
     setAcuse(t.id);
     window.setTimeout(() => setAcuse(null), 1200);
     startTransition(async () => {
@@ -54,11 +55,19 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
     });
   }
 
+  /**
+   * Un toque abre el detalle, salvo el caso más común: un suplemento de una
+   * sola toma que aún no has tomado hoy. Ahí registrar directo es lo correcto
+   * —es la razón de que la tarjeta exista— y meter una pantalla en medio sería
+   * ceremonia.
+   *
+   * Si YA lo tomaste, en cambio, se abre: tocar dos veces sin darte cuenta te
+   * haría creer que tomaste dos dosis, y con las pastillas del psiquiatra eso
+   * importa.
+   */
   function tocar(t: Tarjeta) {
-    // Un toque en las de dosis abre el selector con lo que tomas normalmente
-    // ya puesto: casi siempre basta con confirmar.
-    if (t.dosing.kind === "steps") setDosificando(t);
-    else registrar(t, null);
+    if (t.dosing.kind === "single" && t.count === 0) return registrar(t, null);
+    setAbierta(t.id);
   }
 
   useVoiceTarget("Di cuál · «creatina»", (texto) => {
@@ -72,18 +81,35 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
     return true;
   });
 
+  const detalle = items.find((t) => t.id === abierta) ?? null;
+
   const todas = items.flatMap((t) =>
     t.entries.map((e) => ({ ...e, nombre: t.name, dosing: t.dosing })),
   );
 
+  function deshacer(id: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await undoSupplement(id);
+      if (!r.ok) setError(r.error);
+      else router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-5">
-      {dosificando ? (
-        <Dosificador
-          tarjeta={dosificando}
+      {detalle ? (
+        <SupplementDetail
+          icon={detalle.icon}
+          name={detalle.name}
+          dosing={detalle.dosing}
+          summary={detalle.summary}
+          takenToday={detalle.count > 0}
+          entries={detalle.entries}
           busy={pending}
-          onCancel={() => setDosificando(null)}
-          onConfirm={(dose) => registrar(dosificando, dose)}
+          onAdd={(dose) => registrar(detalle, dose)}
+          onUndo={deshacer}
+          onCancel={() => setAbierta(null)}
         />
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
@@ -137,7 +163,7 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
         </p>
       )}
 
-      {todas.length > 0 && !dosificando && (
+      {todas.length > 0 && !detalle && (
         <section className="space-y-2">
           <h2 className="text-xs font-medium tracking-[0.12em] text-muted uppercase">
             Hoy · {todas.length}
@@ -162,13 +188,7 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
                     </span>
                   )}
                   <button
-                    onClick={() =>
-                      startTransition(async () => {
-                        const r = await undoSupplement(e.id);
-                        if (!r.ok) setError(r.error);
-                        else router.refresh();
-                      })
-                    }
+                    onClick={() => deshacer(e.id)}
                     disabled={pending}
                     aria-label={`Deshacer ${e.nombre}`}
                     className="text-muted transition hover:text-accent disabled:opacity-50"
@@ -180,94 +200,6 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
           </ol>
         </section>
       )}
-    </div>
-  );
-}
-
-/**
- * Selector de cantidad, con los pasos que declara cada suplemento.
- *
- * Abre con lo que tomas normalmente ya puesto, así que el caso de siempre es
- * confirmar y ya. Los pasos vienen del catálogo —medio scoop en proteína, 5 g
- * en creatina— porque teclear una cantidad con las manos ocupadas es lo que
- * hace que se deje de registrar.
- */
-function Dosificador({
-  tarjeta,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  tarjeta: Tarjeta;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: (dose: number) => void;
-}) {
-  const d = tarjeta.dosing;
-  const pasos = d.kind === "steps" ? d : null;
-  const [valor, setValor] = useState(pasos?.default ?? 1);
-
-  if (!pasos) return null;
-
-  const ajustar = (delta: number) =>
-    setValor((v) =>
-      Math.min(pasos.max, Math.max(pasos.step, Number((v + delta).toFixed(2)))),
-    );
-
-  return (
-    <div className="space-y-4 rounded-2xl border border-accent bg-surface p-5">
-      <div className="text-center">
-        <div className="text-4xl">{tarjeta.icon}</div>
-        <h2 className="mt-2 font-medium">{tarjeta.name}</h2>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => ajustar(-pasos.step)}
-          disabled={busy || valor <= pasos.step}
-          aria-label={`Quitar ${pasos.step} ${pasos.unit}`}
-          className="flex size-16 shrink-0 items-center justify-center rounded-full border border-line text-3xl transition active:scale-90 disabled:opacity-30"
-        >
-          −
-        </button>
-
-        <div className="min-w-0 flex-1 text-center">
-          <div className="font-mono text-4xl leading-none tabular-nums">{valor}</div>
-          <div className="mt-1 text-xs text-muted">
-            {valor === 1 ? pasos.unitLabel[0] : pasos.unitLabel[1]}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => ajustar(pasos.step)}
-          disabled={busy || valor >= pasos.max}
-          aria-label={`Añadir ${pasos.step} ${pasos.unit}`}
-          className="flex size-16 shrink-0 items-center justify-center rounded-full border border-line text-3xl transition active:scale-90 disabled:opacity-30"
-        >
-          +
-        </button>
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="flex-1 rounded-xl border border-line py-3.5 text-sm text-muted transition active:scale-[0.98] disabled:opacity-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={() => onConfirm(valor)}
-          disabled={busy}
-          className="flex-[2] rounded-xl bg-accent py-3.5 font-medium text-white transition active:scale-[0.98] disabled:opacity-50"
-        >
-          Registrar {formatoDosis(valor, d)}
-        </button>
-      </div>
     </div>
   );
 }
