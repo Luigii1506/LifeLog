@@ -19,6 +19,7 @@ export function AlreadyLogged({
   label,
   summary,
   detail,
+  note,
   loggedAt,
   eventId,
   onEdit,
@@ -29,6 +30,8 @@ export function AlreadyLogged({
   summary: string;
   /** Matiz, en pequeño: «desde las 23:00». */
   detail?: string;
+  /** Lo que escribiste tú. */
+  note?: string;
   /** Cuándo se pulsó el botón. */
   loggedAt: string;
   eventId: string;
@@ -56,6 +59,15 @@ export function AlreadyLogged({
         </p>
 
         {detail && <p className="mt-2 text-sm text-muted">{detail}</p>}
+
+        {note && (
+          // A la IZQUIERDA y con comilla: es prosa, y la prosa centrada se lee
+          // mal en cuanto pasa de una línea. La barra lateral la separa de los
+          // datos sin encerrarla en otra caja dentro de la caja.
+          <blockquote className="mt-5 border-l-2 border-done/40 pl-3 text-left text-sm leading-relaxed break-words whitespace-pre-line">
+            {note}
+          </blockquote>
+        )}
 
         <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-muted">
           <span

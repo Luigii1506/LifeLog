@@ -41,6 +41,8 @@ const UNA_VEZ = new Set<QuickFlowId>(["wake", "sleep", "weight", "mood"]);
 
 export type TodayEntry = {
   eventId: string;
+  /** Icono para la tarjeta. En el ánimo, la cara que elegiste. */
+  icon?: string;
   /**
    * El dato, corto: «07:30», «78 kg», «7h 30m».
    *
@@ -48,8 +50,13 @@ export type TodayEntry = {
    * línea y deja la tarjeta torcida. Lo que no cabe va en `detail`.
    */
   summary: string;
-  /** Matiz, en pequeño: «desde las 23:00», «Bien». */
+  /** Matiz, en pequeño: «desde las 23:00». */
   detail?: string;
+  /**
+   * Lo que escribiste tú. Va aparte del resto porque es PROSA, no un dato:
+   * se lee, no se ojea, y como línea gris pequeña no se lee.
+   */
+  note?: string;
   /** Cuándo se pulsó el botón, HH:MM en la zona del evento. */
   loggedAt: string;
   payload: Record<string, unknown>;
@@ -100,10 +107,19 @@ export async function todayEntry(
     vigente.timezone,
   );
 
+  // La nota es común a casi todos los tipos y siempre se llama igual, así que
+  // se saca aquí en vez de en cada rama de `describir`.
+  const nota = typeof payload.note === "string" ? payload.note.trim() : "";
+
   return {
     eventId: vigente.id,
+    icon:
+      kind === "mood.logged" && Number.isFinite(Number(payload.score))
+        ? (caraDeAnimo(Number(payload.score)) ?? undefined)
+        : undefined,
     summary,
     detail,
+    note: nota || undefined,
     loggedAt: hora(vigente.createdAt, vigente.timezone),
     payload,
   };
@@ -154,11 +170,12 @@ function describir(
 
     case "mood.logged": {
       const score = Number(p.score);
-      // La cara dice más que el número, y el número lo confirma.
-      const cara = CARA_DE.find(([tope]) => score <= tope)?.[1] ?? "";
+      if (!Number.isFinite(score)) return { summary: "—" };
+      // La cara va como icono grande de la tarjeta, así que aquí basta el
+      // número: repetirla sería decir lo mismo dos veces.
       return {
-        summary: Number.isFinite(score) ? `${cara} ${score}/10`.trim() : "—",
-        detail: typeof p.label === "string" ? p.label : undefined,
+        summary: `${score}/10`,
+        detail: ETIQUETA_ANIMO.find(([tope]) => score <= tope)?.[1],
       };
     }
 
@@ -169,11 +186,23 @@ function describir(
   }
 }
 
-/** La misma escala de caras que usa el flujo al preguntar. */
-const CARA_DE: [tope: number, cara: string][] = [
-  [2, "😖"],
-  [4, "😕"],
-  [6, "😐"],
-  [8, "🙂"],
-  [10, "🤩"],
+/** La misma escala que usa el flujo al preguntar. */
+const ETIQUETA_ANIMO: [tope: number, texto: string][] = [
+  [2, "Mal"],
+  [4, "Regular"],
+  [6, "Normal"],
+  [8, "Bien"],
+  [10, "Excelente"],
 ];
+
+/** La cara, para usarla como icono de la tarjeta en vez del genérico. */
+export function caraDeAnimo(score: number): string | null {
+  const escala: [number, string][] = [
+    [2, "😖"],
+    [4, "😕"],
+    [6, "😐"],
+    [8, "🙂"],
+    [10, "🤩"],
+  ];
+  return escala.find(([tope]) => score <= tope)?.[1] ?? null;
+}

@@ -40,8 +40,10 @@ export function QuickFlowRunner({
   /** Lo ya registrado hoy. Si existe, se enseña en vez de preguntar. */
   existing?: {
     eventId: string;
+    icon?: string;
     summary: string;
     detail?: string;
+    note?: string;
     loggedAt: string;
   } | null;
 }) {
@@ -122,10 +124,11 @@ export function QuickFlowRunner({
   if (existing && !corrigiendo && !listo) {
     return (
       <AlreadyLogged
-        icon={icon}
+        icon={existing.icon ?? icon}
         label={label}
         summary={existing.summary}
         detail={existing.detail}
+        note={existing.note}
         loggedAt={existing.loggedAt}
         eventId={existing.eventId}
         onEdit={() => {
