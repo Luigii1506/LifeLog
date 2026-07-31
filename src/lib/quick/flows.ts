@@ -259,8 +259,12 @@ export async function buildQuickFlow(
         id, kind: "mood.logged", label: "Ánimo", icon: "😊", done: "Ánimo registrado",
         steps: [
           {
+            // Dos columnas y no cinco: con cinco, cada celda mide 58 px en un
+            // móvil —por debajo de cualquier objetivo cómodo— y la etiqueta hay
+            // que encogerla a 10 px para que «Excelente» quepa. En dos son 156,
+            // y el orden de lectura conserva la escala igual.
             type: "choice", id: "score", question: "¿Cómo te sientes?",
-            columns: 5, coerce: "number",
+            columns: 2, align: "center", coerce: "number",
             options: CARAS.map(([icon, label, valor]) => ({
               value: String(valor), label, icon,
             })),

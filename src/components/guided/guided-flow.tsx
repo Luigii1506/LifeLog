@@ -50,6 +50,11 @@ export type FlowStep =
       coerce?: "number" | "string";
       /** Rejilla de una columna, para escalas largas. */
       columns?: 1 | 2 | 3 | 5;
+      /**
+       * Centra el contenido y agranda el icono. Para escalas de caras, donde
+       * el dibujo es la respuesta y el texto solo la confirma.
+       */
+      align?: "center";
     }
   | {
       type: "quantity";
@@ -293,7 +298,7 @@ function ChoiceStep({
                 : "grid-cols-2"
         }`}
       >
-        {step.options.map((opcion) => (
+        {step.options.map((opcion, i) => (
           <button
             key={opcion.value}
             disabled={busy}
@@ -306,26 +311,51 @@ function ChoiceStep({
               })
             }
             className={`flex flex-col rounded-xl border border-line bg-surface transition active:scale-[0.97] disabled:opacity-50 ${
-              step.columns === 5
-                ? "items-center gap-1 px-1 py-3 text-center"
-                : step.columns === 3
-                  ? "items-center gap-1.5 p-3 text-center"
-                  : "min-h-24 items-start justify-between p-4 text-left"
+              step.align === "center"
+                ? "items-center justify-center gap-2 px-3 py-5 text-center"
+                : step.columns === 5
+                  ? "items-center gap-1 px-1 py-3 text-center"
+                  : step.columns === 3
+                    ? "items-center gap-1.5 p-3 text-center"
+                    : "min-h-24 items-start justify-between p-4 text-left"
+            } ${
+              // En dos columnas con un número impar, la última queda sola a
+              // media anchura y se lee como un error de maquetación. Ocupando
+              // la fila entera cierra la rejilla.
+              (step.columns ?? 2) === 2 &&
+              step.options.length % 2 === 1 &&
+              i === step.options.length - 1
+                ? "col-span-2"
+                : ""
             }`}
           >
             {opcion.icon && (
               <span
                 className={`leading-none ${
-                  step.columns === 5 ? "text-3xl" : "text-2xl"
+                  step.align === "center"
+                    ? "text-4xl"
+                    : step.columns === 5
+                      ? "text-3xl"
+                      : "text-2xl"
                 }`}
               >
                 {opcion.icon}
               </span>
             )}
-            <span className={step.columns && step.columns >= 3 ? "" : "mt-2"}>
+            <span
+              className={
+                step.align === "center" || (step.columns && step.columns >= 3)
+                  ? ""
+                  : "mt-2"
+              }
+            >
               <span
                 className={`block leading-tight font-medium ${
-                  step.columns === 5 ? "text-[10px]" : ""
+                  step.align === "center"
+                    ? ""
+                    : step.columns === 5
+                      ? "text-[10px]"
+                      : ""
                 }`}
               >
                 {opcion.label}
