@@ -78,3 +78,28 @@ describe("integridad del catálogo", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe("qué se registra de un solo toque", () => {
+  it("la creatina sí: siempre es el mismo scoop", () => {
+    // Preguntar «¿cuánto?» para responder 5 todos los días es un paso que no
+    // aporta nada.
+    const d = suplementoPorId("creatina")!.dosing;
+    expect(d.kind === "steps" && d.oneTap).toBe(true);
+  });
+
+  it("la proteína no: varía según el día", () => {
+    // Va de uno a dos scoops y medio. Ahorrarse ahí la pregunta sería
+    // falsear el dato justo donde más se nota.
+    const d = suplementoPorId("proteina")!.dosing;
+    expect(d.kind === "steps" && d.oneTap).toBeFalsy();
+  });
+
+  it("lo de un toque tiene una dosis por defecto que registrar", () => {
+    // Sin `default` no habría qué escribir al tocar.
+    for (const s of SUPLEMENTOS) {
+      if (s.dosing.kind !== "steps" || !s.dosing.oneTap) continue;
+      expect(s.dosing.default, s.name).toBeGreaterThan(0);
+      expect(s.dosing.default, s.name).toBeLessThanOrEqual(s.dosing.max);
+    }
+  });
+});

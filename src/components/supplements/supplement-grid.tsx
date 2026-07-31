@@ -56,17 +56,25 @@ export function SupplementGrid({ items }: { items: Tarjeta[] }) {
   }
 
   /**
-   * Un toque abre el detalle, salvo el caso más común: un suplemento de una
-   * sola toma que aún no has tomado hoy. Ahí registrar directo es lo correcto
-   * —es la razón de que la tarjeta exista— y meter una pantalla en medio sería
-   * ceremonia.
+   * El primer toque del día registra lo de siempre; el segundo abre el detalle.
    *
-   * Si YA lo tomaste, en cambio, se abre: tocar dos veces sin darte cuenta te
-   * haría creer que tomaste dos dosis, y con las pastillas del psiquiatra eso
-   * importa.
+   * Vale para lo que no varía: una pastilla, el aceite, y la creatina —un scoop
+   * de 5 g todos los días—. Preguntar la cantidad para responder lo mismo
+   * siempre es un paso que no aporta nada.
+   *
+   * La proteína queda fuera: va de uno a dos scoops y medio según el día, y
+   * ahorrarse ahí la pregunta sería falsear el dato.
+   *
+   * Y a partir de la segunda toma se abre SIEMPRE: tocar dos veces sin darte
+   * cuenta te haría creer que tomaste dos dosis, y con las pastillas del
+   * psiquiatra eso no es un detalle.
    */
   function tocar(t: Tarjeta) {
-    if (t.dosing.kind === "single" && t.count === 0) return registrar(t, null);
+    if (t.count > 0) return setAbierta(t.id);
+
+    if (t.dosing.kind === "single") return registrar(t, null);
+    if (t.dosing.oneTap) return registrar(t, t.dosing.default);
+
     setAbierta(t.id);
   }
 

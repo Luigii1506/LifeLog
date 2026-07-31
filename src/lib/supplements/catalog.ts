@@ -26,6 +26,15 @@ export type Dosing =
       unit: string;
       /** Singular y plural, para no escribir «1 scoops». */
       unitLabel: [uno: string, varios: string];
+      /**
+       * La dosis de siempre es tan constante que preguntarla sobra.
+       *
+       * Con esto, el primer toque del día registra `default` sin abrir nada —
+       * como una pastilla— y el segundo abre el detalle para ajustar. Solo vale
+       * cuando la cantidad casi nunca cambia: en la proteína, que va de uno a
+       * dos y medio según el día, ahorrarse la pregunta sería falsear el dato.
+       */
+      oneTap?: boolean;
     };
 
 export type Supplement = {
@@ -65,6 +74,9 @@ export const SUPLEMENTOS: Supplement[] = [
       max: 20,
       unit: "g",
       unitLabel: ["g", "g"],
+      // Un scoop al día, siempre el mismo. Preguntar «¿cuánto?» para responder
+      // 5 todos los días es un paso que no aporta nada.
+      oneTap: true,
     },
   },
   {
