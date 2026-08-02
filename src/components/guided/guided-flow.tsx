@@ -220,7 +220,16 @@ function ChoiceStep({
   busy?: boolean;
   onAnswer: (a: FlowAnswer) => void;
 }) {
-  const [custom, setCustom] = useState<string | null>(null);
+  /**
+   * Sin opciones que ofrecer, se abre directamente el campo de escribir.
+   *
+   * Las listas que salen del historial empiezan vacías, y una pantalla que
+   * pregunta «¿en qué?» sin nada debajo salvo «otra cosa» es un callejón: hay
+   * que tocar dos veces para llegar a lo único que se puede hacer. Vale para
+   * cualquier flujo, no solo el que lo destapó.
+   */
+  const sinOpciones = step.options.length === 0 && Boolean(step.customLabel);
+  const [custom, setCustom] = useState<string | null>(sinOpciones ? "" : null);
 
   // Un solo registro para los dos modos del paso: elegir de la lista y
   // escribir algo que no está en ella. No puede haber dos `useVoiceTarget`
@@ -268,13 +277,16 @@ function ChoiceStep({
           >
             Continuar
           </button>
-          <button
-            type="button"
-            onClick={() => setCustom(null)}
-            className="rounded-xl border border-line px-5 text-muted"
-          >
-            Atrás
-          </button>
+          {/* Sin opciones no hay adónde volver: este campo ES el paso. */}
+          {!sinOpciones && (
+            <button
+              type="button"
+              onClick={() => setCustom(null)}
+              className="rounded-xl border border-line px-5 text-muted"
+            >
+              Atrás
+            </button>
+          )}
         </div>
       </form>
     );

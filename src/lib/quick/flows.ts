@@ -311,7 +311,13 @@ export async function buildQuickFlow(
     }
 
     case "focus": {
-      const tareas = await recentValues("focus.block", "task");
+      // Con lista de arranque, igual que Actividad: sin ella el segundo paso
+      // salía vacío hasta tener historial, y preguntaba «¿en qué?» sin nada
+      // que tocar.
+      const vistas = await recentValues("focus.block", "task");
+      const tareas = vistas.length
+        ? vistas
+        : ["Programar", "Escribir", "Estudiar", "Planear"];
       return {
         id, kind: "focus.block", label: "Trabajo", icon: "🎯",
         done: "Bloque registrado",

@@ -217,3 +217,23 @@ describe.skipIf(!HAY_BASE_DE_PRUEBAS)("estado del día en las tarjetas", () => {
     expect(await cuenta("activity")).toBe(antes + 2);
   });
 });
+
+describe.skipIf(!HAY_BASE_DE_PRUEBAS)("ningún paso se queda sin nada que tocar", () => {
+  it("las listas que salen del historial tienen arranque en frío", async () => {
+    // El fallo: «¿En qué?» de Trabajo salía con cero opciones hasta tener
+    // historial, así que preguntaba sin nada debajo salvo «otra cosa». Es la
+    // misma enfermedad que tenía «¿Dónde?» en gasto.
+    const { QUICK_FLOWS } = await import("@/lib/quick/catalog");
+    for (const entrada of QUICK_FLOWS) {
+      if (entrada.href) continue; // tiene pantalla propia, no es un flujo
+      const spec = await flows.buildQuickFlow(entrada.id);
+      for (const paso of spec?.steps ?? []) {
+        if (paso.type !== "choice") continue;
+        expect(
+          paso.options.length,
+          `${entrada.id} · «${paso.question}» se queda sin opciones`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+});
