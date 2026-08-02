@@ -1,4 +1,5 @@
 import type { TimelineEntry } from "@/lib/events/query";
+import { colapsarRepetidos } from "@/lib/events/collapse";
 
 const DOMAIN_COLOR: Record<string, string> = {
   health: "#5b8c5a",
@@ -11,7 +12,17 @@ const DOMAIN_COLOR: Record<string, string> = {
   ritual: "#9c6b8e",
 };
 
+/**
+ * La línea de tiempo del día.
+ *
+ * Las repeticiones seguidas se agrupan antes de pintar. El agua se registra
+ * ocho o diez veces al día, y sin agrupar el entrenamiento, el sueño y las
+ * notas quedaban enterrados entre sesenta filas de «Agua» — justo lo que uno
+ * abre esta pantalla para ver.
+ */
 export function Timeline({ entries }: { entries: TimelineEntry[] }) {
+  const grupos = colapsarRepetidos(entries);
+
   if (entries.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted">
@@ -22,14 +33,14 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
 
   return (
     <ol className="relative space-y-0">
-      {entries.map((entry, i) => (
+      {grupos.map((entry, i) => (
         <li key={entry.id} className="flex gap-4">
           <div className="flex flex-col items-center">
             <span
               className="mt-2 size-2.5 shrink-0 rounded-full"
               style={{ background: DOMAIN_COLOR[entry.domain] ?? "#8a8378" }}
             />
-            {i < entries.length - 1 && (
+            {i < grupos.length - 1 && (
               <span className="w-px flex-1 bg-line" />
             )}
           </div>
@@ -40,9 +51,18 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
                 {formatTime(entry.startedAt, entry.timezone)}
               </time>
               <span className="font-medium">{entry.label}</span>
+              {entry.count > 1 && (
+                <span className="rounded-full bg-line px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted">
+                  ×{entry.count}
+                </span>
+              )}
             </div>
             <p className="mt-0.5 text-sm text-muted">
-              {summarize(entry)}
+              {/* Con varios agrupados manda la SUMA: «1.2 L» dice más que el
+                  detalle de la primera toma, que es lo que se vería si no. */}
+              {entry.count > 1 && entry.aggregate
+                ? entry.aggregate
+                : summarize(entry)}
             </p>
           </div>
         </li>

@@ -57,6 +57,18 @@ export type TimelineEntry = {
 export const SUFIJO_RETIRADO = ":retirado";
 
 /**
+ * Marcas de retirada anteriores a `:retirado`.
+ *
+ * El deshacer del agua nació antes que la marca y usaba `:deshacer`. Esos
+ * eventos siguen en el log —nada se borra— y sin reconocerlos aparecen como
+ * tomas de 0 ml: sesenta y tres filas de «Agua» que nadie registró.
+ *
+ * Se reconocen en vez de migrarse: son datos que ya existen, y reescribir el
+ * log para arreglar una consulta es exactamente lo que I-02 prohíbe.
+ */
+const SUFIJOS_LEGADO = [":deshacer"];
+
+/**
  * Los ids que NO deben verse, de entre los que se le pasen (I-02).
  *
  * Se ocultan dos cosas: lo anulado por una corrección posterior, y las propias
@@ -76,7 +88,13 @@ export async function revokedAmong(ids: string[]): Promise<Set<string>> {
       select: { revokesId: true },
     }),
     db.event.findMany({
-      where: { id: { in: ids }, source: { endsWith: SUFIJO_RETIRADO } },
+      where: {
+        id: { in: ids },
+        OR: [
+          { source: { endsWith: SUFIJO_RETIRADO } },
+          ...SUFIJOS_LEGADO.map((s) => ({ source: { endsWith: s } })),
+        ],
+      },
       select: { id: true },
     }),
   ]);
@@ -102,6 +120,7 @@ export async function timelineForDay(
 
   return events
     .filter((e) => !revoked.has(e.id))
+    .filter((e) => registraAlgo(e.kind, safeParse(e.payloadJson)))
     .map((e) => ({
       id: e.id,
       kind: e.kind,
@@ -113,6 +132,19 @@ export async function timelineForDay(
       entityId: e.entityId,
       payload: safeParse(e.payloadJson),
     }));
+}
+
+/**
+ * ¿Este evento registra algo?
+ *
+ * Un trago de 0 ml no es un trago: son los eventos de deshacer de antes de que
+ * existiera la marca de retirada. Sin este filtro, la línea de tiempo decía
+ * «Agua ×23» mientras la pantalla de agua contaba 4 tomas — y cuando dos
+ * pantallas discrepan sobre el mismo día, se deja de creer a las dos.
+ */
+function registraAlgo(kind: string, payload: Record<string, unknown>): boolean {
+  if (kind === "water.logged") return (payload.ml as number) > 0;
+  return true;
 }
 
 function safeParse(json: string): Record<string, unknown> {
